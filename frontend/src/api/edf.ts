@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { getApiUrl } from '../env';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = () => getApiUrl('');
 
 export interface EDFMetadata {
   file_id: string;
@@ -28,7 +29,7 @@ export async function uploadEDF(file: File): Promise<EDFMetadata> {
   const formData = new FormData();
   formData.append('file', file);
   
-  const response = await axios.post(`${API_BASE}/upload/`, formData, {
+  const response = await axios.post(`${API_BASE()}/upload/`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   
@@ -36,7 +37,7 @@ export async function uploadEDF(file: File): Promise<EDFMetadata> {
 }
 
 export async function getMetadata(fileId: string): Promise<EDFMetadata> {
-  const response = await axios.get(`${API_BASE}/metadata/${fileId}`);
+  const response = await axios.get(`${API_BASE()}/metadata/${fileId}`);
   return response.data;
 }
 
@@ -47,7 +48,7 @@ export async function getWaveform(
   channels?: number[]
 ): Promise<WaveformData> {
   const channelsParam = channels ? channels.join(',') : undefined;
-  const response = await axios.get(`${API_BASE}/waveform/${fileId}`, {
+  const response = await axios.get(`${API_BASE()}/waveform/${fileId}`, {
     params: { start, duration, channels: channelsParam },
   });
 
@@ -60,7 +61,7 @@ export async function getWaveformOverview(
   channels?: number[]
 ): Promise<WaveformData> {
   const channelsParam = channels ? channels.join(',') : undefined;
-  const response = await axios.get(`${API_BASE}/waveform_overview/${fileId}`, {
+  const response = await axios.get(`${API_BASE()}/waveform_overview/${fileId}`, {
     params: { samples_per_second: samplesPerSecond, channels: channelsParam },
   });
 
