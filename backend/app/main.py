@@ -41,8 +41,9 @@ async def root():
     return {"message": "EDF Viewer API", "docs": "/docs", "health": "/health"}
 
 
-from app.api.routes import upload, metadata, waveform, waveform_overview
+from app.api.routes import upload, metadata, waveform, waveform_overview, health
 
+app.include_router(health.router)
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(metadata.router, prefix="/api/metadata", tags=["metadata"])
 app.include_router(waveform.router, prefix="/api/waveform", tags=["waveform"])
