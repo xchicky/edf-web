@@ -2,12 +2,14 @@ import React from 'react';
 
 interface AmplitudeAxisProps {
   channelHeight: number;      // Pixels per channel
+  numChannels: number;        // Total number of channels
   amplitudeScale: number;     // Current voltage scaling factor
   unit?: string;              // "µV" or "mV"
 }
 
 export const AmplitudeAxis: React.FC<AmplitudeAxisProps> = ({
   channelHeight,
+  numChannels,
   amplitudeScale,
   unit = 'µV',
 }) => {
@@ -32,12 +34,13 @@ export const AmplitudeAxis: React.FC<AmplitudeAxisProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size
+    // Set canvas size to cover all channels
+    const totalHeight = channelHeight * numChannels;
     canvas.width = 50;
-    canvas.height = channelHeight;
+    canvas.height = totalHeight;
 
     // Clear canvas
-    ctx.clearRect(0, 0, 50, channelHeight);
+    ctx.clearRect(0, 0, 50, totalHeight);
 
     const { min, max } = calculateAmplitudeRange(amplitudeScale);
     const range = max - min;
@@ -48,30 +51,37 @@ export const AmplitudeAxis: React.FC<AmplitudeAxisProps> = ({
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
 
-    for (let i = 0; i <= 4; i++) {
-      const value = min + (i * tickInterval);
-      const y = channelHeight - ((value - min) / range) * channelHeight;
+    // Draw labels for each channel
+    for (let ch = 0; ch < numChannels; ch++) {
+      const channelTop = ch * channelHeight;
 
-      // Draw tick mark
-      ctx.strokeStyle = '#ADB5BD';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(45, y);
-      ctx.lineTo(50, y);
-      ctx.stroke();
+      for (let i = 0; i <= 4; i++) {
+        const value = min + (i * tickInterval);
+        // Calculate y position within this channel
+        const yInChannel = channelHeight - ((value - min) / range) * channelHeight;
+        const y = channelTop + yInChannel;
 
-      // Draw amplitude label
-      ctx.fillText(formatAmplitude(value), 42, y);
+        // Draw tick mark
+        ctx.strokeStyle = '#ADB5BD';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(45, y);
+        ctx.lineTo(50, y);
+        ctx.stroke();
 
-      // Draw horizontal grid line
-      ctx.strokeStyle = '#E9ECEF';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(50, y);
-      ctx.lineTo(50, y); // Will extend when integrated with main canvas
-      ctx.stroke();
+        // Draw amplitude label
+        ctx.fillText(formatAmplitude(value), 42, y);
+
+        // Draw horizontal grid line
+        ctx.strokeStyle = '#E9ECEF';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(50, y);
+        ctx.lineTo(50, y); // Will extend when integrated with main canvas
+        ctx.stroke();
+      }
     }
-  }, [channelHeight, amplitudeScale, unit]);
+  }, [channelHeight, numChannels, amplitudeScale, unit]);
 
   return <canvas ref={canvasRef} className="amplitude-axis" />;
 };

@@ -581,6 +581,7 @@ function App() {
                 <div className="amplitude-axis-wrapper">
                   <AmplitudeAxis
                     channelHeight={channelHeight}
+                    numChannels={waveform.channels.length}
                     amplitudeScale={amplitudeScale}
                     unit="µV"
                   />
