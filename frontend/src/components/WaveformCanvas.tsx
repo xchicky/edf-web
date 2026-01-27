@@ -202,7 +202,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       gridCtx.strokeStyle = '#DEE2E6';
       gridCtx.lineWidth = 1;
 
-      // Vertical grid lines (time) - use windowDuration instead of waveformData.duration
+      // Vertical grid lines (time) - 1 second intervals
       const timeStep = (width - 50) / windowDuration;
       for (let t = 0; t <= windowDuration; t += 1) {
         const x = 50 + t * timeStep;
@@ -212,14 +212,49 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         gridCtx.stroke();
       }
 
-      // Horizontal grid lines (amplitude)
+      // Horizontal grid lines (amplitude) - main and minor ticks
       const numChannels = waveformData.channels.length;
       const channelHeight = height / numChannels;
-      for (let i = 0; i <= numChannels; i++) {
-        const y = i * channelHeight;
+
+      // Amplitude range: -100 to 100 µV
+      const voltageRange = 200; // -100 to 100
+      const mainTickInterval = 50; // Main ticks every 50µV (5 ticks per channel)
+      const minorTickInterval = 10; // Minor ticks every 10µV (5x finer)
+
+      for (let ch = 0; ch < numChannels; ch++) {
+        const channelTop = ch * channelHeight;
+        const channelBottom = (ch + 1) * channelHeight;
+
+        // Draw minor grid lines (thinner, lighter)
+        gridCtx.strokeStyle = '#F0F0F0';
+        gridCtx.lineWidth = 0.5;
+        for (let v = -100; v <= 100; v += minorTickInterval) {
+          const yInChannel = channelHeight - ((v + 100) / voltageRange) * channelHeight;
+          const y = channelTop + yInChannel;
+          gridCtx.beginPath();
+          gridCtx.moveTo(50, y);
+          gridCtx.lineTo(width, y);
+          gridCtx.stroke();
+        }
+
+        // Draw main grid lines (thicker, darker)
+        gridCtx.strokeStyle = '#DEE2E6';
+        gridCtx.lineWidth = 1;
+        for (let v = -100; v <= 100; v += mainTickInterval) {
+          const yInChannel = channelHeight - ((v + 100) / voltageRange) * channelHeight;
+          const y = channelTop + yInChannel;
+          gridCtx.beginPath();
+          gridCtx.moveTo(50, y);
+          gridCtx.lineTo(width, y);
+          gridCtx.stroke();
+        }
+
+        // Draw channel separator line
+        gridCtx.strokeStyle = '#DEE2E6';
+        gridCtx.lineWidth = 1;
         gridCtx.beginPath();
-        gridCtx.moveTo(0, y);
-        gridCtx.lineTo(width, y);
+        gridCtx.moveTo(0, channelBottom);
+        gridCtx.lineTo(width, channelBottom);
         gridCtx.stroke();
       }
     }
