@@ -66,6 +66,17 @@ function App() {
     return () => window.removeEventListener('resize', updateWidth);
   }, []);
 
+  // Recalculate canvas width when waveform data loads
+  // This ensures TimeAxis width matches WaveformCanvas after EDF is loaded
+  React.useEffect(() => {
+    if (waveform) {
+      if (waveformContainerRef.current) {
+        const width = waveformContainerRef.current.clientWidth - 32;
+        setCanvasWidth(width);
+      }
+    }
+  }, [waveform]);
+
   // Calculate layout parameters for axes
   const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
   const channelHeight = waveform ? 600 / waveform.channels.length : 100;
