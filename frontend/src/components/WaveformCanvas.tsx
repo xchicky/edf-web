@@ -185,9 +185,9 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       gridCtx.lineWidth = 1;
 
       // Vertical grid lines (time)
-      const timeStep = width / waveformData.duration;
+      const timeStep = (width - 50) / waveformData.duration;
       for (let t = 0; t <= waveformData.duration; t += 1) {
-        const x = t * timeStep;
+        const x = 50 + t * timeStep;
         gridCtx.beginPath();
         gridCtx.moveTo(x, 0);
         gridCtx.lineTo(x, height);
@@ -244,7 +244,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         const step = pixelDensity > 2 ? Math.ceil(pixelDensity / 2) : 1;
 
         for (let j = 0; j < data.length; j += step) {
-          const x = ((times[j] - waveformData.times[0]) / waveformData.duration) * width;
+          const x = 50 + ((times[j] - waveformData.times[0]) / waveformData.duration) * (width - 50);
           const y = yBase - data[j] / amplitudeScale;
           if (j === 0) {
             ctx.moveTo(x, y);
