@@ -63,7 +63,8 @@ export const TimeAxis: React.FC<TimeAxisProps> = ({
       const time = startTime + i * tickInterval;
       if (time > startTime + duration) break;
 
-      const x = (i * tickInterval * pixelsPerSecond);
+      // Align with WaveformCanvas: add 50px offset for amplitude axis
+      const x = 50 + (i * tickInterval * pixelsPerSecond);
 
       // Draw tick mark
       ctx.strokeStyle = '#ADB5BD';
