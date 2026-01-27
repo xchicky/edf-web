@@ -225,12 +225,6 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         const channelTop = ch * channelHeight;
         const channelBottom = (ch + 1) * channelHeight;
 
-        // Draw channel background (alternating light gray)
-        if (ch % 2 === 0) {
-          gridCtx.fillStyle = '#F8F9FA';
-          gridCtx.fillRect(0, channelTop, width, channelHeight);
-        }
-
         // Draw minor grid lines (thinner, lighter)
         gridCtx.strokeStyle = '#F0F0F0';
         gridCtx.lineWidth = 0.5;
@@ -255,9 +249,9 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
           gridCtx.stroke();
         }
 
-        // Draw channel separator line
-        gridCtx.strokeStyle = '#DEE2E6';
-        gridCtx.lineWidth = 1;
+        // Draw channel separator line (thick line between channels)
+        gridCtx.strokeStyle = '#999999';
+        gridCtx.lineWidth = 2;
         gridCtx.beginPath();
         gridCtx.moveTo(0, channelBottom);
         gridCtx.lineTo(width, channelBottom);
