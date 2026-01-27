@@ -181,7 +181,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       if (!gridCtx) return;
 
       // Draw grid on offscreen canvas
-      gridCtx.strokeStyle = '#E9ECEF';
+      gridCtx.strokeStyle = '#DEE2E6';
       gridCtx.lineWidth = 1;
 
       // Vertical grid lines (time)
