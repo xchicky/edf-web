@@ -97,9 +97,9 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         if (channelIndex >= 0 && channelIndex < waveformData.channels.length) {
           const channel = waveformData.channels[channelIndex];
           const yBase = channelIndex * channelHeight + channelHeight / 2;
-          // Inverse of drawing formula: y = yBase - data[j] / amplitudeScale
-          // Therefore: data[j] = (yBase - y) * amplitudeScale
-          const amplitude = (yBase - canvasY) * amplitudeScale;
+          // Inverse of drawing formula: y = yBase - (data[j] * channelHeight) / (200 * amplitudeScale)
+          // Therefore: data[j] = (yBase - y) * (200 * amplitudeScale) / channelHeight
+          const amplitude = (yBase - canvasY) * (200 * amplitudeScale) / channelHeight;
 
           setCursorInfo({
             visible: true,
@@ -263,7 +263,8 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
 
         for (let j = 0; j < data.length; j += step) {
           const x = 50 + ((times[j] - waveformData.times[0]) / waveformData.duration) * (width - 50);
-          const y = yBase - data[j] / amplitudeScale;
+          // Map voltage to pixel position: voltage range [-100, 100] maps to channel height
+          const y = yBase - (data[j] * channelHeight) / (200 * amplitudeScale);
           if (j === 0) {
             ctx.moveTo(x, y);
           } else {
