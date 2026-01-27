@@ -245,7 +245,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
 
         for (let j = 0; j < data.length; j += step) {
           const x = ((times[j] - waveformData.times[0]) / waveformData.duration) * width;
-          const y = yBase - (data[j] * 0.5);
+          const y = yBase - data[j] / amplitudeScale;
           if (j === 0) {
             ctx.moveTo(x, y);
           } else {
@@ -277,7 +277,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         animationFrameRef.current = null;
       }
     };
-  }, [waveformData, channelColors]);
+  }, [waveformData, channelColors, amplitudeScale]);
 
   return (
     <>
