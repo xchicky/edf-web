@@ -6,8 +6,14 @@ import { useEDFStore } from './store/edfStore';
 import { ChannelSelector } from './components/ChannelSelector';
 import { TimeToolbar } from './components/TimeToolbar';
 import { WaveformCanvas } from './components/WaveformCanvas';
-import { ZoomIndicator } from './components/ZoomIndicator';
+
 import { OverviewStrip } from './components/OverviewStrip';
+import { TimeAxis } from './components/TimeAxis';
+import { TimeScrubber } from './components/TimeScrubber';
+import { AmplitudeAxis } from './components/AmplitudeAxis';
+import { ResolutionIndicator } from './components/ResolutionIndicator';
+import { InteractionHint } from './components/InteractionHint';
+import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import './App.css';
 
 function App() {
@@ -39,6 +45,29 @@ function App() {
     removeBookmark,
     jumpToBookmark,
   } = useEDFStore();
+
+  // Track actual canvas width to match WaveformCanvas and TimeAxis
+  const waveformContainerRef = React.useRef<HTMLDivElement>(null);
+  const [canvasWidth, setCanvasWidth] = React.useState(800);
+
+  // Update canvas width when container size changes
+  React.useEffect(() => {
+    const updateWidth = () => {
+      if (waveformContainerRef.current) {
+        // Match WaveformCanvas calculation: parentElement.clientWidth - 32
+        const width = waveformContainerRef.current.clientWidth - 32;
+        setCanvasWidth(width);
+      }
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  // Calculate layout parameters for axes
+  const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
+  const channelHeight = waveform ? 600 / waveform.channels.length : 100;
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: { 'application/octet-stream': ['.edf'] },
@@ -383,7 +412,19 @@ function App() {
               <h3>Time Window</h3>
 
               <label>Quick Zoom:</label>
-              <div className="button-group">
+              <div className="window-presets">
+                <button
+                  onClick={() => setWindowDuration(1)}
+                  className={windowDuration === 1 ? 'active' : ''}
+                >
+                  1s
+                </button>
+                <button
+                  onClick={() => setWindowDuration(5)}
+                  className={windowDuration === 5 ? 'active' : ''}
+                >
+                  5s
+                </button>
                 <button
                   onClick={() => setWindowDuration(10)}
                   className={windowDuration === 10 ? 'active' : ''}
@@ -400,9 +441,22 @@ function App() {
                   onClick={() => setWindowDuration(60)}
                   className={windowDuration === 60 ? 'active' : ''}
                 >
-                  60s
+                  1m
+                </button>
+                <button
+                  onClick={() => setWindowDuration(300)}
+                  className={windowDuration === 300 ? 'active' : ''}
+                >
+                  5m
                 </button>
               </div>
+
+              <TimeScrubber
+                currentTime={currentTime}
+                totalDuration={metadata.duration_seconds}
+                windowDuration={windowDuration}
+                onTimeChange={setCurrentTime}
+              />
 
               <label>
                 Start Time (s):
@@ -422,19 +476,6 @@ function App() {
                     +10s
                   </button>
                 </div>
-              </label>
-
-              <label>
-                Duration (s):
-                <input
-                  type="range"
-                  min="1"
-                  max="60"
-                  value={windowDuration}
-                  onChange={(e) => setWindowDuration(Number(e.target.value))}
-                  className="duration-slider"
-                />
-                <span className="range-value">{windowDuration}s</span>
               </label>
 
               <button onClick={handleLoadWaveform} disabled={isLoading} className="primary-button">
@@ -523,15 +564,35 @@ function App() {
                   <span className="value">{formatTime(currentTime)} - {formatTime(currentTime + windowDuration)}</span>
                 </div>
               </div>
-              <WaveformCanvas
-                waveformData={waveform}
-                channelColors={channelColors}
-                currentTime={currentTime}
-                windowDuration={windowDuration}
-                amplitudeScale={amplitudeScale}
-                onTimeChange={setCurrentTime}
-                onAmplitudeChange={setAmplitudeScale}
-              />
+
+              <div className="waveform-display-container" ref={waveformContainerRef}>
+                <div className="amplitude-axis-wrapper">
+                  <AmplitudeAxis
+                    channelHeight={channelHeight}
+                    amplitudeScale={amplitudeScale}
+                    unit="µV"
+                  />
+                </div>
+                <WaveformCanvas
+                  waveformData={waveform}
+                  channelColors={channelColors}
+                  currentTime={currentTime}
+                  windowDuration={windowDuration}
+                  amplitudeScale={amplitudeScale}
+                  onTimeChange={setCurrentTime}
+                  onAmplitudeChange={setAmplitudeScale}
+                />
+              </div>
+
+              <div className="time-axis-wrapper">
+                <TimeAxis
+                  duration={windowDuration}
+                  startTime={currentTime}
+                  width={canvasWidth}
+                  pixelsPerSecond={pixelsPerSecond}
+                />
+              </div>
+
               <OverviewStrip
                 fileId={metadata?.file_id || ''}
                 currentTime={currentTime}
@@ -553,12 +614,6 @@ function App() {
                 onChannelToggle={toggleChannel}
                 onSelectAll={selectAllChannels}
                 onDeselectAll={deselectAllChannels}
-              />
-              <ZoomIndicator
-                timeZoom={windowDuration}
-                amplitudeZoom={amplitudeScale}
-                maxTimeZoom={60}
-                maxAmplitudeZoom={10}
               />
             </>
           )}
@@ -585,6 +640,20 @@ function App() {
           onAmplitudeChange={handleAmplitudeChange}
         />
       )}
+
+      {metadata && (
+        <ResolutionIndicator
+          samplingRate={metadata.sfreq}
+          windowDuration={windowDuration}
+          amplitudeScale={amplitudeScale}
+          nChannelsSelected={selectedChannels.length}
+          nChannelsTotal={metadata.n_channels}
+          totalDuration={metadata.duration_seconds}
+        />
+      )}
+
+      <InteractionHint />
+      <KeyboardShortcuts />
     </div>
   );
 }

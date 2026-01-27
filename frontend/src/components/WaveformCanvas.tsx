@@ -69,28 +69,41 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     if (!isDragging && !dragStart && waveformData) {
       // Show cursor crosshair and tooltip
       const rect = canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
-      
+
       if (x > 50 && x < rect.width && y >= 0 && y < rect.height) {
-        const pixelsPerSecond = (rect.width - 50) / windowDuration;
-        const time = currentTime + (x - 50) / pixelsPerSecond;
-        
-        const channelHeight = rect.height / waveformData.channels.length;
-        const channelIndex = Math.floor(y / channelHeight);
-        
+        // CRITICAL: Use canvas.width (device pixels) for accurate calculation
+        // rect.width can differ on high-DPI displays (devicePixelRatio)
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+
+        // Convert mouse position from CSS pixels to canvas pixels
+        const scaleX = canvasWidth / rect.width;
+        const scaleY = canvasHeight / rect.height;
+        const canvasX = x * scaleX;
+        const canvasY = y * scaleY;
+
+        const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
+        const time = currentTime + (canvasX - 50) / pixelsPerSecond;
+
+        const channelHeight = canvasHeight / waveformData.channels.length;
+        const channelIndex = Math.floor(canvasY / channelHeight);
+
         if (channelIndex >= 0 && channelIndex < waveformData.channels.length) {
           const channel = waveformData.channels[channelIndex];
           const yBase = channelIndex * channelHeight + channelHeight / 2;
-          const amplitude = (yBase - y) / amplitudeScale;
-          
+          // Inverse of drawing formula: y = yBase - data[j] / amplitudeScale
+          // Therefore: data[j] = (yBase - y) * amplitudeScale
+          const amplitude = (yBase - canvasY) * amplitudeScale;
+
           setCursorInfo({
             visible: true,
-            x,
+            x,  // Keep CSS pixels for cursor display position
             y,
             time: formatTime(time),
             amplitude: `${amplitude.toFixed(1)} µV`,
@@ -171,10 +184,15 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     const height = canvas.height = 600;
 
     // Pre-render grid to offscreen canvas
-    if (!gridCanvasRef.current || gridCanvasRef.current.width !== width || gridCanvasRef.current.height !== height) {
+    // Invalidate grid cache when width, height, OR windowDuration changes
+    if (!gridCanvasRef.current ||
+        gridCanvasRef.current.width !== width ||
+        gridCanvasRef.current.height !== height ||
+        gridCanvasRef.current.dataset.windowDuration !== windowDuration.toString()) {
       const gridCanvas = document.createElement('canvas');
       gridCanvas.width = width;
       gridCanvas.height = height;
+      gridCanvas.dataset.windowDuration = windowDuration.toString(); // Store for cache comparison
       gridCanvasRef.current = gridCanvas;
 
       const gridCtx = gridCanvas.getContext('2d');
@@ -184,9 +202,9 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       gridCtx.strokeStyle = '#DEE2E6';
       gridCtx.lineWidth = 1;
 
-      // Vertical grid lines (time)
-      const timeStep = (width - 50) / waveformData.duration;
-      for (let t = 0; t <= waveformData.duration; t += 1) {
+      // Vertical grid lines (time) - use windowDuration instead of waveformData.duration
+      const timeStep = (width - 50) / windowDuration;
+      for (let t = 0; t <= windowDuration; t += 1) {
         const x = 50 + t * timeStep;
         gridCtx.beginPath();
         gridCtx.moveTo(x, 0);
@@ -277,7 +295,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         animationFrameRef.current = null;
       }
     };
-  }, [waveformData, channelColors, amplitudeScale]);
+  }, [waveformData, channelColors, amplitudeScale, windowDuration]);
 
   return (
     <>

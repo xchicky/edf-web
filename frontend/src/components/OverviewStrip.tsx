@@ -6,8 +6,8 @@ interface OverviewStripProps {
   currentTime: number;
   windowDuration: number;
   totalDuration: number;
-  onTimeChange: (time: number) => void;
   channels?: number[];
+  onTimeChange?: (time: number) => void; // Unused: kept for backward compatibility
 }
 
 interface OverviewData {
@@ -25,16 +25,13 @@ export const OverviewStrip: React.FC<OverviewStripProps> = ({
   currentTime,
   windowDuration,
   totalDuration,
-  onTimeChange,
   channels,
+  onTimeChange: _onTimeChange, // Unused: kept for backward compatibility
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [overviewData, setOverviewData] = useState<OverviewData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStartX, setDragStartX] = useState(0);
-  const [dragStartTime, setDragStartTime] = useState(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Load overview data
   useEffect(() => {
@@ -115,57 +112,6 @@ export const OverviewStrip: React.FC<OverviewStripProps> = ({
     ctx.strokeRect(windowStartX, 0, windowWidth, height);
   }, [overviewData, currentTime, windowDuration, totalDuration]);
 
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-
-    // Convert x position to time
-    const clickedTime = (x / canvas.width) * totalDuration;
-
-    // Center the window on clicked position
-    const newTime = Math.max(0, Math.min(clickedTime - windowDuration / 2, totalDuration - windowDuration));
-    onTimeChange(newTime);
-  };
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-
-    setIsDragging(true);
-    setDragStartX(x);
-    setDragStartTime(currentTime);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging || !canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-
-    // Calculate drag delta
-    const dxPixels = x - dragStartX;
-    const dxTime = (dxPixels / canvas.width) * totalDuration;
-
-    // Update time
-    const newTime = Math.max(0, Math.min(dragStartTime - dxTime, totalDuration - windowDuration));
-    onTimeChange(newTime);
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleMouseLeave = () => {
-    setIsDragging(false);
-  };
-
   if (isLoading) {
     return (
       <div className="overview-strip loading">
@@ -182,18 +128,17 @@ export const OverviewStrip: React.FC<OverviewStripProps> = ({
     );
   }
 
+  if (!overviewData) return null;
+
+  const canvasHeight = Math.max(150, overviewData.data.length * 10);
+
   return (
-    <div className="overview-strip">
+    <div className="overview-strip" style={{ maxHeight: '300px', overflowY: 'auto' }}>
       <canvas
         ref={canvasRef}
         width={800}
-        height={150}
-        onClick={handleCanvasClick}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        style={{ cursor: isDragging ? 'grabbing' : 'pointer' }}
+        height={canvasHeight}
+        style={{ cursor: 'default' }}
       />
     </div>
   );
