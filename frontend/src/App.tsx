@@ -50,8 +50,9 @@ function App() {
   const waveformContainerRef = React.useRef<HTMLDivElement>(null);
   const [canvasWidth, setCanvasWidth] = React.useState(800);
 
-  // Update canvas width when container size changes
-  React.useEffect(() => {
+  // Use useLayoutEffect to calculate width BEFORE initial render
+  // This ensures TimeAxis and WaveformCanvas have matching widths from the start
+  React.useLayoutEffect(() => {
     const updateWidth = () => {
       if (waveformContainerRef.current) {
         // Match WaveformCanvas calculation: parentElement.clientWidth - 32
