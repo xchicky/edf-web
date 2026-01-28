@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Signal, SignalComputationResult } from '../types/signal';
+import type { Signal, SignalComputationResult } from '../types/signal';
 import { loadSignals, saveSignals } from '../utils/signalStorage';
 
 export interface EDFMetadata {

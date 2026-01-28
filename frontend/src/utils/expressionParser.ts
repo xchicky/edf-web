@@ -3,7 +3,7 @@
  * 用于解析、验证和提取信号表达式中的通道引用
  */
 
-import { SignalValidation, OperandDefinition } from '../types/signal';
+import type { SignalValidation, OperandDefinition } from '../types/signal';
 
 /**
  * 表达式验证器 - 使用正则表达式和简单的语法检查
@@ -121,7 +121,7 @@ export class ExpressionValidator {
     if (temp) {
       // 尝试提取可能的通道名称
       const unknownChannels = temp.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || [];
-      if (unknownChannels.length > 0) {
+      if (unknownChannels.length > 0 && unknownChannels[0]) {
         channels.add(unknownChannels[0]); // 添加第一个未知标识符，让后续检查捕获
       }
     }

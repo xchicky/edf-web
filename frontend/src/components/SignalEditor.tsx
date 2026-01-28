@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Signal } from '../types/signal';
+import type { Signal } from '../types/signal';
 import { extractOperands, validateExpression } from '../utils/expressionParser';
 import { SignalExpressionBuilder } from './SignalExpressionBuilder';
 import styles from './SignalEditor.module.css';

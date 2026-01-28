@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Signal } from '../types/signal';
+import type { Signal } from '../types/signal';
 import styles from './SignalList.module.css';
 
 interface SignalListProps {

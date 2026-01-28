@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { useEDFStore } from '../edfStore';
 import * as signalStorage from '../../utils/signalStorage';
-import { Signal } from '../../types/signal';
+import type { Signal } from '../../types/signal';
 
 // Mock localStorage
 const localStorageMock = (() => {

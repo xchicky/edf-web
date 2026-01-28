@@ -7,7 +7,6 @@ import {
   validateExpression,
   extractOperands,
   preprocessExpression,
-  ExpressionValidator,
 } from '../expressionParser';
 
 describe('ExpressionValidator', () => {

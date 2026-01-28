@@ -3,10 +3,10 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SignalList } from '../SignalList';
-import { Signal } from '../../types/signal';
+import type { Signal } from '../../types/signal';
 
 describe('SignalList', () => {
   const mockSignals: Signal[] = [

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { getApiUrl } from '../env';
-import { Signal, SignalValidation, SignalComputationResult } from '../types/signal';
+import type { SignalValidation, SignalComputationResult } from '../types/signal';
 
 const API_BASE = () => getApiUrl('');
 

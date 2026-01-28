@@ -3,7 +3,7 @@
  * 用于 localStorage 的持久化操作
  */
 
-import { Signal } from '../types/signal';
+import type { Signal } from '../types/signal';
 
 const STORAGE_KEY_PREFIX = 'edf-signals';
 

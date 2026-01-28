@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SignalEditor } from '../SignalEditor';
-import { Signal } from '../../types/signal';
+import type { Signal } from '../../types/signal';
 
 describe('SignalEditor', () => {
   const mockChannelNames = ['Fp1', 'Fp2', 'F3', 'F4', 'Cz', 'Pz'];
