@@ -6,6 +6,8 @@ import { useEDFStore } from './store/edfStore';
 import { ChannelSelector } from './components/ChannelSelector';
 import { TimeToolbar } from './components/TimeToolbar';
 import { WaveformCanvas } from './components/WaveformCanvas';
+import { SignalEditor } from './components/SignalEditor';
+import { SignalList } from './components/SignalList';
 
 import { OverviewStrip } from './components/OverviewStrip';
 import { TimeAxis } from './components/TimeAxis';
@@ -28,6 +30,7 @@ function App() {
     amplitudeScale,
     isPlaying,
     bookmarks,
+    signals,
     setMetadata,
     setWaveform,
     setLoading,
@@ -44,7 +47,17 @@ function App() {
     addBookmark,
     removeBookmark,
     jumpToBookmark,
+    addSignal,
+    updateSignal,
+    deleteSignal,
+    toggleSignal,
+    loadSignalsFromStorage,
+    saveSignalsToStorage,
   } = useEDFStore();
+
+  // Signal management state
+  const [isSignalEditorOpen, setIsSignalEditorOpen] = useState(false);
+  const [editingSignal, setEditingSignal] = useState<any>(null);
 
   // Track actual canvas width to match WaveformCanvas and TimeAxis
   const waveformContainerRef = React.useRef<HTMLDivElement>(null);
@@ -92,6 +105,9 @@ function App() {
       try {
         const result = await uploadEDF(files[0]);
         setMetadata(result as any);
+
+        // Load saved signals for this file
+        loadSignalsFromStorage(result.file_id);
 
         // Auto-select first 10 channels
         const initialChannels = Array.from({ length: Math.min(10, result.n_channels) }, (_, i) => i);
@@ -161,6 +177,44 @@ function App() {
       debouncedLoadWaveform.cancel();
     };
   }, [currentTime, windowDuration, selectedChannels, metadata, debouncedLoadWaveform]);
+
+  // Signal management handlers
+  const handleSaveSignal = (signal: any) => {
+    if (editingSignal) {
+      updateSignal(editingSignal.id, signal);
+    } else {
+      addSignal(signal);
+    }
+    if (metadata) {
+      saveSignalsToStorage(metadata.file_id);
+    }
+    setIsSignalEditorOpen(false);
+    setEditingSignal(null);
+  };
+
+  const handleEditSignal = (signal: any) => {
+    setEditingSignal(signal);
+    setIsSignalEditorOpen(true);
+  };
+
+  const handleDeleteSignal = (id: string) => {
+    deleteSignal(id);
+    if (metadata) {
+      saveSignalsToStorage(metadata.file_id);
+    }
+  };
+
+  const handleToggleSignal = (id: string) => {
+    toggleSignal(id);
+    if (metadata) {
+      saveSignalsToStorage(metadata.file_id);
+    }
+  };
+
+  const handleAddNewSignal = () => {
+    setEditingSignal(null);
+    setIsSignalEditorOpen(true);
+  };
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -628,6 +682,14 @@ function App() {
                 onSelectAll={selectAllChannels}
                 onDeselectAll={deselectAllChannels}
               />
+
+              <SignalList
+                signals={signals}
+                onEdit={handleEditSignal}
+                onDelete={handleDeleteSignal}
+                onToggle={handleToggleSignal}
+                onAddNew={handleAddNewSignal}
+              />
             </>
           )}
         </section>
@@ -667,6 +729,19 @@ function App() {
 
       <InteractionHint />
       <KeyboardShortcuts />
+
+      {metadata && (
+        <SignalEditor
+          isOpen={isSignalEditorOpen}
+          signal={editingSignal}
+          channelNames={metadata.channel_names}
+          onSave={handleSaveSignal}
+          onCancel={() => {
+            setIsSignalEditorOpen(false);
+            setEditingSignal(null);
+          }}
+        />
+      )}
     </div>
   );
 }
