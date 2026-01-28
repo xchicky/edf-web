@@ -135,12 +135,11 @@ class TestSignalsAPI:
 
     def test_calculate_signals_success(self, sample_edf_file, monkeypatch):
         """测试信号计算成功"""
-        # Mock file_manager.get_file_path
+        # Mock get_file_path in signals.py
         def mock_get_file_path(file_id):
             return sample_edf_file
 
-        from app.services import file_manager
-        monkeypatch.setattr(file_manager, "get_file_path", mock_get_file_path)
+        monkeypatch.setattr("app.api.routes.signals.get_file_path", mock_get_file_path)
 
         response = client.post(
             "/api/signals/calculate",
@@ -174,8 +173,7 @@ class TestSignalsAPI:
         def mock_get_file_path(file_id):
             return sample_edf_file
 
-        from app.services import file_manager
-        monkeypatch.setattr(file_manager, "get_file_path", mock_get_file_path)
+        monkeypatch.setattr("app.api.routes.signals.get_file_path", mock_get_file_path)
 
         response = client.post(
             "/api/signals/calculate",
@@ -240,8 +238,7 @@ class TestSignalsAPI:
         def mock_get_file_path(file_id):
             return sample_edf_file
 
-        from app.services import file_manager
-        monkeypatch.setattr(file_manager, "get_file_path", mock_get_file_path)
+        monkeypatch.setattr("app.api.routes.signals.get_file_path", mock_get_file_path)
 
         response = client.post(
             "/api/signals/calculate",
@@ -269,8 +266,7 @@ class TestSignalsAPI:
         def mock_get_file_path(file_id):
             return sample_edf_file
 
-        from app.services import file_manager
-        monkeypatch.setattr(file_manager, "get_file_path", mock_get_file_path)
+        monkeypatch.setattr("app.api.routes.signals.get_file_path", mock_get_file_path)
 
         response = client.post(
             "/api/signals/calculate",
