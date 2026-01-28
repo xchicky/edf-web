@@ -130,10 +130,10 @@ export const OverviewStrip: React.FC<OverviewStripProps> = ({
 
   if (!overviewData) return null;
 
-  const canvasHeight = Math.max(150, overviewData.data.length * 10);
+  const canvasHeight = Math.max(80, overviewData.data.length * 6);
 
   return (
-    <div className="overview-strip" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+    <div className="overview-strip" style={{ maxHeight: '120px', overflowY: 'auto' }}>
       <canvas
         ref={canvasRef}
         width={800}

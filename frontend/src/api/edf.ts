@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getApiUrl } from '../env';
+import { Signal, SignalValidation, SignalComputationResult } from '../types/signal';
 
 const API_BASE = () => getApiUrl('');
 
@@ -28,11 +29,11 @@ export interface WaveformData {
 export async function uploadEDF(file: File): Promise<EDFMetadata> {
   const formData = new FormData();
   formData.append('file', file);
-  
+
   const response = await axios.post(`${API_BASE()}/upload/`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
-  
+
   return response.data;
 }
 
@@ -67,3 +68,47 @@ export async function getWaveformOverview(
 
   return response.data;
 }
+
+/**
+ * 验证信号表达式
+ */
+export async function validateSignalExpression(
+  expression: string,
+  channelNames: string[]
+): Promise<SignalValidation> {
+  const response = await axios.post(`${API_BASE()}/signals/validate`, {
+    expression,
+    channel_names: channelNames,
+  });
+
+  return response.data;
+}
+
+/**
+ * 计算派生信号
+ */
+export async function calculateSignals(
+  fileId: string,
+  signals: Array<{
+    id: string;
+    expression: string;
+    operands: Array<{
+      id: string;
+      channelName: string;
+      channelIndex: number;
+      coefficient?: number;
+    }>;
+  }>,
+  start: number,
+  duration: number
+): Promise<SignalComputationResult[]> {
+  const response = await axios.post(`${API_BASE()}/signals/calculate`, {
+    file_id: fileId,
+    signals,
+    start,
+    duration,
+  });
+
+  return response.data.results;
+}
+

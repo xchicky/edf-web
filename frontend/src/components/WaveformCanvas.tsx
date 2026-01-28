@@ -181,7 +181,26 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     if (!parentElement) return;
 
     const width = canvas.width = parentElement.clientWidth - 32;
-    const height = canvas.height = 600;
+
+    // Calculate available height dynamically
+    // Get the waveform-display container (grandparent of canvas)
+    const waveformDisplay = parentElement.closest('.waveform-display');
+    let height = 600; // Default fallback
+
+    if (waveformDisplay) {
+      // Get available height in waveform-display
+      const displayHeight = waveformDisplay.clientHeight;
+      // Subtract padding (16px top + 16px bottom)
+      const availableHeight = displayHeight - 32;
+      // Subtract TimeAxis height (30px) and OverviewStrip height (120px) and margins
+      const timeAxisHeight = 30;
+      const overviewStripHeight = 120;
+      const margins = 8; // margin-top of overview-strip
+
+      height = Math.max(400, availableHeight - timeAxisHeight - overviewStripHeight - margins);
+    }
+
+    canvas.height = height;
 
     // Pre-render grid to offscreen canvas
     // Invalidate grid cache when width, height, OR windowDuration changes
