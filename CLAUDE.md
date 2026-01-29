@@ -946,3 +946,396 @@ logger.info(f"Signal calculation took {duration:.2f}s")
 3. **Phase 4**: 支持自定义函数和宏
 4. **Phase 5**: 实现并行计算和流式处理
 5. **Phase 6**: 支持信号导出和分享
+
+## 最佳实践
+
+### 前端开发
+
+**1. 组件设计**:
+- 保持组件单一职责
+- 使用 TypeScript 进行类型检查
+- 使用 React.memo 优化性能
+- 避免在渲染中创建新对象
+
+**2. 状态管理**:
+- 使用 Zustand store 管理全局状态
+- 避免过度嵌套的状态结构
+- 使用 selector 函数优化订阅
+- 定期清理不需要的状态
+
+**3. API 调用**:
+- 使用 axios 进行 HTTP 请求
+- 实现错误处理和重试机制
+- 使用 debounce 避免频繁请求
+- 添加请求超时设置
+
+**4. 测试**:
+- 为每个组件编写单元测试
+- 使用 Testing Library 进行集成测试
+- 保持测试覆盖率 ≥ 80%
+- 测试用户交互而不是实现细节
+
+### 后端开发
+
+**1. API 设计**:
+- 遵循 RESTful 设计原则
+- 使用适当的 HTTP 状态码
+- 返回一致的响应格式
+- 添加 API 文档和示例
+
+**2. 错误处理**:
+- 捕获所有异常
+- 返回有意义的错误消息
+- 记录错误用于调试
+- 不暴露系统内部信息
+
+**3. 性能优化**:
+- 使用延迟加载减少内存使用
+- 实现缓存机制
+- 优化数据库查询
+- 监控性能指标
+
+**4. 安全性**:
+- 验证所有输入
+- 使用受限的命名空间执行表达式
+- 实现速率限制
+- 使用 HTTPS 和认证
+
+### 代码质量
+
+**1. 代码风格**:
+- 遵循项目的代码规范
+- 使用 ESLint 和 Prettier 格式化代码
+- 编写清晰的变量和函数名
+- 添加必要的注释和文档
+
+**2. 版本控制**:
+- 使用 Conventional Commits 格式
+- 编写清晰的提交消息
+- 定期推送代码到远程仓库
+- 使用分支进行功能开发
+
+**3. 文档**:
+- 更新 CLAUDE.md 文档
+- 添加代码注释
+- 编写 API 文档
+- 维护 README 文件
+
+## 集成指南
+
+### 将信号管理集成到现有应用
+
+**步骤 1: 安装依赖**
+```bash
+cd frontend
+npm install axios @tanstack/react-query react-dropzone lodash.debounce
+```
+
+**步骤 2: 添加类型定义**
+```typescript
+// frontend/src/types/signal.ts
+export interface Signal {
+  id: string;
+  name: string;
+  expression: string;
+  operands: OperandDefinition[];
+  description?: string;
+  color?: string;
+  enabled: boolean;
+  createdAt: number;
+  modifiedAt: number;
+}
+
+export interface SignalComputationResult {
+  id: string;
+  data: number[];
+  times: number[];
+  sfreq: number;
+  n_samples: number;
+}
+```
+
+**步骤 3: 添加 API 客户端**
+```typescript
+// frontend/src/api/signals.ts
+import axios from 'axios';
+
+const API_URL = process.env.VITE_API_URL || 'http://localhost:8000';
+
+export const validateExpression = async (
+  expression: string,
+  channels: string[]
+) => {
+  const response = await axios.post(`${API_URL}/api/signals/validate`, {
+    expression,
+    channels,
+  });
+  return response.data;
+};
+
+export const calculateSignals = async (
+  fileId: string,
+  start: number,
+  duration: number,
+  signals: any[]
+) => {
+  const response = await axios.post(`${API_URL}/api/signals/calculate`, {
+    file_id: fileId,
+    start,
+    duration,
+    signals,
+  });
+  return response.data;
+};
+```
+
+**步骤 4: 更新 Zustand Store**
+```typescript
+// frontend/src/store/edfStore.ts
+import { create } from 'zustand';
+
+interface EDFStore {
+  // ... 现有状态
+  signals: Signal[];
+  signalData: Map<string, SignalComputationResult>;
+  isLoadingSignals: boolean;
+
+  // ... 现有方法
+  addSignal: (signal: Signal) => void;
+  updateSignal: (id: string, updates: Partial<Signal>) => void;
+  deleteSignal: (id: string) => void;
+  setSignalData: (signalId: string, data: SignalComputationResult) => void;
+}
+
+export const useEDFStore = create<EDFStore>((set, get) => ({
+  // ... 现有实现
+  signals: [],
+  signalData: new Map(),
+  isLoadingSignals: false,
+
+  addSignal: (signal) => {
+    const { signals } = get();
+    set({ signals: [...signals, signal] });
+  },
+
+  // ... 其他方法
+}));
+```
+
+**步骤 5: 集成到 App.tsx**
+```typescript
+// frontend/src/App.tsx
+import { SignalEditor } from './components/SignalEditor';
+import { SignalList } from './components/SignalList';
+import { calculateSignals } from './api/signals';
+
+export const App: React.FC = () => {
+  const {
+    signals,
+    signalData,
+    addSignal,
+    updateSignal,
+    deleteSignal,
+    setSignalDataBatch,
+  } = useEDFStore();
+
+  const handleLoadDerivedSignals = async () => {
+    if (!metadata || signals.length === 0) return;
+
+    try {
+      const results = await calculateSignals(
+        fileId,
+        currentTime,
+        windowDuration,
+        signals.filter(s => s.enabled)
+      );
+      setSignalDataBatch(results);
+    } catch (error) {
+      console.error('Failed to calculate signals:', error);
+    }
+  };
+
+  return (
+    <div className="app">
+      {/* 现有组件 */}
+      <SignalList
+        signals={signals}
+        onEdit={handleEditSignal}
+        onDelete={deleteSignal}
+      />
+      <SignalEditor
+        isOpen={editingSignal !== null}
+        signal={editingSignal}
+        onSave={handleSaveSignal}
+        onCancel={handleCancelEdit}
+      />
+      {/* 波形画布显示派生信号 */}
+      <WaveformCanvas data={mergedWaveformData} />
+    </div>
+  );
+};
+```
+
+**步骤 6: 后端集成**
+```python
+# backend/app/main.py
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from backend.app.api.routes import signals
+
+app = FastAPI()
+
+# 添加 CORS 中间件
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 注册信号管理路由
+app.include_router(signals.router, prefix="/api/signals", tags=["signals"])
+
+# ... 其他路由
+```
+
+### 迁移现有数据
+
+如果从其他系统迁移，可以使用以下脚本：
+
+```python
+# backend/scripts/migrate_signals.py
+import json
+from backend.app.services.expression_validator import ExpressionValidator
+
+def migrate_signals(old_signals_file: str, new_signals_file: str):
+    """将旧格式的信号定义迁移到新格式"""
+
+    with open(old_signals_file, 'r') as f:
+        old_signals = json.load(f)
+
+    validator = ExpressionValidator()
+    new_signals = []
+
+    for old_signal in old_signals:
+        # 验证表达式
+        validation = validator.validate_expression(
+            old_signal['expression'],
+            old_signal['channels']
+        )
+
+        if validation['isValid']:
+            new_signal = {
+                'id': old_signal.get('id', f"sig-{len(new_signals)}"),
+                'name': old_signal['name'],
+                'expression': old_signal['expression'],
+                'operands': old_signal.get('operands', []),
+                'description': old_signal.get('description'),
+                'color': old_signal.get('color', '#2196f3'),
+                'enabled': old_signal.get('enabled', True),
+                'createdAt': old_signal.get('createdAt', int(time.time() * 1000)),
+                'modifiedAt': old_signal.get('modifiedAt', int(time.time() * 1000)),
+            }
+            new_signals.append(new_signal)
+        else:
+            print(f"Invalid signal: {old_signal['name']}")
+
+    with open(new_signals_file, 'w') as f:
+        json.dump(new_signals, f, indent=2)
+
+    print(f"Migrated {len(new_signals)} signals")
+
+if __name__ == '__main__':
+    migrate_signals('old_signals.json', 'new_signals.json')
+```
+
+## 常见问题解答 (FAQ)
+
+**Q: 派生信号支持哪些操作？**
+A: 支持基本算术运算 (+, -, *, /)、括号分组、NumPy 函数 (abs, mean, std, min, max, sum, sqrt, log, exp)。
+
+**Q: 如何添加新的 NumPy 函数支持？**
+A: 修改 `backend/app/services/expression_validator.py` 中的 `_extract_functions()` 方法，添加新函数到白名单。
+
+**Q: 派生信号数据会被保存吗？**
+A: 信号定义会保存到 localStorage，但计算结果不会保存。每次加载文件时都会重新计算。
+
+**Q: 如何处理包含 NaN 值的数据？**
+A: 可以在表达式中使用 `np.nan_to_num()` 函数，或在后端预处理数据。
+
+**Q: 支持多少个派生信号？**
+A: 理论上没有限制，但受内存和性能影响。建议不超过 50 个。
+
+**Q: 如何调试表达式计算失败？**
+A: 检查浏览器控制台和后端日志，查看具体的错误消息。
+
+**Q: 派生信号可以基于其他派生信号吗？**
+A: 当前不支持，只能基于原始 EEG 通道。
+
+**Q: 如何导出派生信号数据？**
+A: 可以从 signalData Map 中提取数据，然后导出为 CSV 或其他格式。
+
+**Q: 表达式验证在前端还是后端进行？**
+A: 两者都进行。前端进行快速验证，后端进行完整验证。
+
+**Q: 如何处理大型 EDF 文件的派生信号计算？**
+A: 使用延迟加载和时间窗口限制，只加载和计算所需的数据。
+
+**Q: 派生信号支持实时更新吗？**
+A: 支持。当时间窗口或其他参数变化时，会自动重新计算。
+
+## 参考资源
+
+### 官方文档
+- [FastAPI 文档](https://fastapi.tiangolo.com/)
+- [React 文档](https://react.dev/)
+- [MNE-Python 文档](https://mne.tools/)
+- [Zustand 文档](https://github.com/pmndrs/zustand)
+
+### 相关项目
+- [EDF 文件格式规范](https://www.edfplus.info/)
+- [NumPy 文档](https://numpy.org/doc/)
+- [Vite 文档](https://vitejs.dev/)
+
+### 学习资源
+- EEG 信号处理基础
+- Python 异步编程
+- React Hooks 最佳实践
+- TypeScript 高级特性
+
+## 贡献指南
+
+### 报告问题
+
+如果发现 bug 或有改进建议，请：
+1. 检查是否已有相关 issue
+2. 提供详细的问题描述和复现步骤
+3. 附加相关的日志和截图
+4. 指定受影响的版本
+
+### 提交代码
+
+1. Fork 项目
+2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'feat: add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 开启 Pull Request
+
+### 代码审查
+
+所有 PR 都需要：
+- 通过 ESLint 和 Prettier 检查
+- 通过所有单元测试
+- 保持测试覆盖率 ≥ 80%
+- 至少一个代码审查批准
+
+## 许可证
+
+本项目采用 MIT 许可证。详见 LICENSE 文件。
+
+## 联系方式
+
+- 项目主页: [GitHub](https://github.com/your-org/edf-web)
+- 问题追踪: [Issues](https://github.com/your-org/edf-web/issues)
+- 讨论区: [Discussions](https://github.com/your-org/edf-web/discussions)
