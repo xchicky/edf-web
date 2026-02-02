@@ -1,15 +1,24 @@
 import React from 'react';
 import type { WaveformData } from '../store/edfStore';
 import { CursorOverlay } from './CursorOverlay';
+import { useEDFStore } from '../store/edfStore';
 
 interface WaveformCanvasProps {
   waveformData: WaveformData;
   channelColors: string[];
   onTimeChange?: (newTime: number) => void;
   onAmplitudeChange?: (newAmplitude: number) => void;
+  onHeightChange?: (height: number) => void;
   currentTime?: number;
   windowDuration?: number;
   amplitudeScale?: number;
+  // 选择相关属性
+  onSelectionChange?: (start: number | null, end: number | null) => void;
+  // 从store传入的选择状态
+  selectionStart?: number | null;
+  selectionEnd?: number | null;
+  isSelecting?: boolean;
+  hasSelection?: boolean;  // 是否有已确认的选择
 }
 
 export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
@@ -17,15 +26,23 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   channelColors,
   onTimeChange,
   onAmplitudeChange,
+  onHeightChange,
   currentTime = 0,
   windowDuration = 5,
   amplitudeScale = 1.0,
+  onSelectionChange: _onSelectionChange,
+  selectionStart = null,
+  selectionEnd = null,
+  isSelecting = false,
+  hasSelection = false,
 }) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const gridCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = React.useRef<number | null>(null);
-  const [isDragging, setIsDragging] = React.useState(false);
-  const [dragStart, setDragStart] = React.useState<{x: number; time: number} | null>(null);
+  // 选择状态直接从 store 获取（通过 props 传入）
+  // 本地不再维护选择状态，确保与 store 同步
+  // 跟踪鼠标按下位置，用于区分单击和拖拽
+  const [mouseDownPos, setMouseDownPos] = React.useState<{x: number; y: number} | null>(null);
   const [cursorInfo, setCursorInfo] = React.useState<{
     visible: boolean;
     x: number;
@@ -52,17 +69,35 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
-    
-    if (x > 50) { // Don't drag on amplitude axis
-      setIsDragging(true);
-      setDragStart({
-        x: event.clientX,
-        time: currentTime,
-      });
-      canvas.style.cursor = 'grabbing';
+
+    // 记录鼠标按下位置，用于区分单击和拖拽
+    setMouseDownPos({ x: event.clientX, y: event.clientY });
+
+    if (x > 50) { // Don't select on amplitude axis
+      // 如果已有选择且不是在拖拽中，先清除选择
+      if (hasSelection && !isSelecting) {
+        const { clearSelection } = useEDFStore.getState();
+        clearSelection();
+        // 不开始新选择，等待用户确认是否要开始新的选择
+        return;
+      }
+
+      // 计算点击位置对应的时间
+      const canvasWidth = canvas.width;
+      const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
+      const clickTime = currentTime + (x - 50) / pixelsPerSecond;
+
+      // 直接更新store中的选择状态
+      const { setSelectionStart, setSelectionEnd, setIsSelecting } = useEDFStore.getState();
+      setSelectionStart(clickTime);
+      setSelectionEnd(clickTime); // 初始时开始和结束相同
+      setIsSelecting(true);
+
+      // 设置选择光标
+      canvas.style.cursor = 'col-resize';
     }
   };
 
@@ -70,7 +105,10 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    if (!isDragging && !dragStart && waveformData) {
+    // 从 props 获取选择状态（这些值来自 store）
+    const isCurrentlySelecting = isSelecting;
+
+    if (!isCurrentlySelecting && waveformData) {
       // Show cursor crosshair and tooltip
       const rect = canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
@@ -112,29 +150,61 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         }
       }
     }
-    
-    if (!isDragging || !dragStart || !onTimeChange) return;
-    
-    const dx = event.clientX - dragStart.x;
-    const pixelsPerSecond = (canvasRef.current?.clientWidth || 800 - 50) / windowDuration;
-    const dt = -dx / pixelsPerSecond; // Negative: drag left = move forward
-    
-    const newTime = Math.max(0, dt);
-    onTimeChange(newTime);
-  };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    setDragStart(null);
-    if (canvasRef.current) {
-      canvasRef.current.style.cursor = 'crosshair';
+    // 如果在选择模式，更新选择的结束时间
+    if (isCurrentlySelecting) {
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+
+      // 计算时间
+      const canvasWidth = canvas.width;
+      const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
+      const time = currentTime + (x - 50) / pixelsPerSecond;
+
+      // 保持时间在有效范围内
+      const clampedTime = Math.max(0, Math.min(time, currentTime + windowDuration));
+
+      // 直接更新store中的选择状态
+      const { setSelectionEnd } = useEDFStore.getState();
+      setSelectionEnd(clampedTime);
     }
   };
 
+  const handleMouseUp = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (canvasRef.current) {
+      canvasRef.current.style.cursor = 'crosshair';
+    }
+
+    // 检查是单击还是拖拽
+    if (mouseDownPos) {
+      const dx = event.clientX - mouseDownPos.x;
+      const dy = event.clientY - mouseDownPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < 5) {
+        // 单击：清除选择
+        const { clearSelection } = useEDFStore.getState();
+        clearSelection();
+        setMouseDownPos(null);
+        return;
+      }
+    }
+
+    // 拖拽：确认选择（保持选择显示）
+    const { confirmSelection } = useEDFStore.getState();
+    confirmSelection();
+    setMouseDownPos(null);
+  };
+
   const handleMouseLeave = () => {
-    setIsDragging(false);
-    setDragStart(null);
     setCursorInfo(prev => ({ ...prev, visible: false }));
+
+    // 如果正在选择，确认选择
+    if (isSelecting) {
+      const { confirmSelection } = useEDFStore.getState();
+      confirmSelection();
+    }
+    setMouseDownPos(null);
   };
 
   const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
@@ -202,16 +272,22 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
 
     canvas.height = height;
 
+    // Report actual height to parent for AmplitudeAxis alignment
+    onHeightChange?.(height);
+
     // Pre-render grid to offscreen canvas
-    // Invalidate grid cache when width, height, OR windowDuration changes
+    // Invalidate grid cache when width, height, windowDuration, OR channel count changes
+    const numChannels = waveformData.channels.length;
     if (!gridCanvasRef.current ||
         gridCanvasRef.current.width !== width ||
         gridCanvasRef.current.height !== height ||
-        gridCanvasRef.current.dataset.windowDuration !== windowDuration.toString()) {
+        gridCanvasRef.current.dataset.windowDuration !== windowDuration.toString() ||
+        gridCanvasRef.current.dataset.numChannels !== numChannels.toString()) {
       const gridCanvas = document.createElement('canvas');
       gridCanvas.width = width;
       gridCanvas.height = height;
       gridCanvas.dataset.windowDuration = windowDuration.toString(); // Store for cache comparison
+      gridCanvas.dataset.numChannels = numChannels.toString(); // Store channel count for cache comparison
       gridCanvasRef.current = gridCanvas;
 
       const gridCtx = gridCanvas.getContext('2d');
@@ -232,7 +308,6 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       }
 
       // Horizontal grid lines (amplitude) - main and minor ticks
-      const numChannels = waveformData.channels.length;
       const channelHeight = height / numChannels;
 
       // Amplitude range: -100 to 100 µV
@@ -327,6 +402,30 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
         ctx.fillText(channelData, 5, yBase + 4);
       });
+
+      // 绘制选择区域
+      // 使用props传入的选择状态
+      // 在选择中或有已确认选择时都渲染选择框
+      if ((isSelecting || hasSelection) && selectionStart !== null && selectionEnd !== null) {
+        // 计算选择区域的像素位置
+        const startX = 50 + ((selectionStart - currentTime) / windowDuration) * (width - 50);
+        const endX = 50 + ((selectionEnd - currentTime) / windowDuration) * (width - 50);
+
+        // 确保选择区域在有效范围内
+        const clampedStartX = Math.max(50, Math.min(startX, width));
+        const clampedEndX = Math.max(50, Math.min(endX, width));
+
+        if (clampedStartX < clampedEndX) {
+          // 绘制选择区域
+          ctx.fillStyle = 'rgba(33, 150, 243, 0.2)'; // 半透明蓝色
+          ctx.fillRect(clampedStartX, 0, clampedEndX - clampedStartX, height);
+
+          // 绘制选择边框
+          ctx.strokeStyle = '#2196F3'; // 深蓝色边框
+          ctx.lineWidth = 1;
+          ctx.strokeRect(clampedStartX, 0, clampedEndX - clampedStartX, height);
+        }
+      }
     };
 
     // Cancel previous animation frame
@@ -344,7 +443,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         animationFrameRef.current = null;
       }
     };
-  }, [waveformData, channelColors, amplitudeScale, windowDuration]);
+  }, [waveformData, channelColors, amplitudeScale, windowDuration, selectionStart, selectionEnd, isSelecting, currentTime]);
 
   return (
     <>

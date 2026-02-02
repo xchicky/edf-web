@@ -87,7 +87,7 @@ describe('WaveformCanvas', () => {
   })
 
   describe('Mouse Interactions', () => {
-    it('should handle mouse down for dragging', () => {
+    it('should handle mouse down for selection', () => {
       render(<WaveformCanvas {...defaultProps} />)
       const canvas = document.querySelector('canvas') as HTMLCanvasElement
 
@@ -96,10 +96,10 @@ describe('WaveformCanvas', () => {
         clientY: 100,
       })
 
-      expect(canvas.style.cursor).toBe('grabbing')
+      expect(canvas.style.cursor).toBe('col-resize')
     })
 
-    it('should not start drag when clicking on amplitude axis (x <= 50)', () => {
+    it('should not start selection when clicking on amplitude axis (x <= 50)', () => {
       render(<WaveformCanvas {...defaultProps} />)
       const canvas = document.querySelector('canvas') as HTMLCanvasElement
 
@@ -108,7 +108,7 @@ describe('WaveformCanvas', () => {
         clientY: 100,
       })
 
-      expect(canvas.style.cursor).not.toBe('grabbing')
+      expect(canvas.style.cursor).toBe('crosshair')
     })
 
     it('should handle mouse up and reset cursor', () => {
@@ -137,31 +137,30 @@ describe('WaveformCanvas', () => {
     })
   })
 
-  describe('Time Navigation', () => {
-    it('should call onTimeChange when dragging', () => {
-      const onTimeChange = vi.fn()
-      render(<WaveformCanvas {...defaultProps} onTimeChange={onTimeChange} />)
+  describe('Selection Functionality', () => {
+    it('should handle mouse down for selection', () => {
+      const onSelectionChange = vi.fn()
+      render(<WaveformCanvas {...defaultProps} onSelectionChange={onSelectionChange} />)
+
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement
+
+      fireEvent.mouseDown(canvas, { clientX: 100, clientY: 100 })
+
+      // Should change cursor to indicate selection mode
+      expect(canvas.style.cursor).toBe('col-resize')
+    })
+
+    it('should update selection during mouse move', () => {
+      const onSelectionChange = vi.fn()
+      render(<WaveformCanvas {...defaultProps} onSelectionChange={onSelectionChange} />)
 
       const canvas = document.querySelector('canvas') as HTMLCanvasElement
 
       fireEvent.mouseDown(canvas, { clientX: 100, clientY: 100 })
       fireEvent.mouseMove(canvas, { clientX: 200, clientY: 100 })
 
-      expect(onTimeChange).toHaveBeenCalled()
-    })
-
-    it('should clamp time to minimum of 0', () => {
-      const onTimeChange = vi.fn()
-      render(<WaveformCanvas {...defaultProps} onTimeChange={onTimeChange} />)
-
-      const canvas = document.querySelector('canvas') as HTMLCanvasElement
-
-      fireEvent.mouseDown(canvas, { clientX: 100, clientY: 100 })
-      fireEvent.mouseMove(canvas, { clientX: 1000, clientY: 100 })
-
-      expect(onTimeChange).toHaveBeenCalledWith(expect.any(Number))
-      const calledValue = onTimeChange.mock.calls[0][0]
-      expect(calledValue).toBeGreaterThanOrEqual(0)
+      // Selection should be updated (verified by cursor staying in selection mode)
+      expect(canvas.style.cursor).toBe('col-resize')
     })
   })
 

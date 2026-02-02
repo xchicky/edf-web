@@ -66,6 +66,46 @@
   padding: 16px;
   overflow-y: auto;
   flex-shrink: 0;
+  transition: width 0.3s ease, padding 0.3s ease;
+}
+
+.left-sidebar.collapsed {
+  width: 40px;
+  padding: 8px 4px;
+}
+
+/* 折叠时隐藏除按钮外的所有内容 */
+.left-sidebar.collapsed > *:not(.sidebar-toggle) {
+  display: none;
+}
+
+.sidebar-toggle {
+  position: sticky;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #495057;
+  transition: background 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle:hover {
+  background: #e9ecef;
+  color: #212529;
+}
+
+.sidebar-toggle:active {
+  background: #dee2e6;
 }
 
 .dropzone {
@@ -280,6 +320,17 @@
   padding: 16px;
   overflow-y: auto;
   flex-shrink: 0;
+  transition: width 0.3s ease, padding 0.3s ease;
+}
+
+.right-sidebar.collapsed {
+  width: 40px;
+  padding: 8px 4px;
+}
+
+/* 折叠时隐藏除按钮外的所有内容 */
+.right-sidebar.collapsed > *:not(.sidebar-toggle) {
+  display: none;
 }
 
 .channel-selector {
@@ -536,36 +587,6 @@
   color: white;
   text-shadow: 0 1px 2px rgba(0,0,0,0.3);
   line-height: 8px;
-}
-
-.waveform-info-overlay {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: rgba(255, 255, 255, 0.95);
-  padding: 8px 12px;
-  border-radius: 4px;
-  border: 1px solid #DEE2E6;
-  font-size: 11px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  z-index: 10;
-}
-
-.waveform-info-overlay .info-item {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 4px;
-}
-
-.waveform-info-overlay .label {
-  color: #6C757D;
-  font-weight: 500;
-}
-
-.waveform-info-overlay .value {
-  color: #212529;
-  font-weight: 600;
 }
 
 /* Keyboard Shortcuts Help Tooltip */
@@ -998,3 +1019,563 @@
 .overview-strip::-webkit-scrollbar-thumb:hover {
   background: #ADB5BD;
 }
+
+/* Selection Info Panel */
+.selection-info {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #2196F3;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  min-width: 280px;
+  max-width: 380px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  z-index: 100;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.selection-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 8px;
+}
+
+.selection-info-header h4 {
+  margin: 0;
+  color: #2196F3;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.selection-info-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.selection-info-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.selection-info-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.selection-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.selection-info-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.selection-info-value {
+  color: #333;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.selection-info-divider {
+  height: 1px;
+  background: #e0e0e0;
+  margin: 8px 0;
+}
+
+.channel-stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.channel-stat {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.channel-stat-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #2196F3;
+  margin-bottom: 8px;
+}
+
+.channel-stat-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.channel-stat-item {
+  display: flex;
+  gap: 4px;
+  font-size: 11px;
+  min-width: 90px;
+}
+
+.channel-stat-label {
+  color: #666;
+}
+
+.channel-stat-value {
+  color: #333;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+/* Scrollbar for channel stats list */
+.channel-stats-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.channel-stats-list::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 3px;
+}
+
+.channel-stats-list::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.channel-stats-list::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
+}
+
+/* Stats View Panel */
+.stats-view {
+  position: fixed;
+  top: 60px;
+  right: 340px; /* 左移，为右侧边栏留出空间 */
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #0066CC;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  min-width: 320px;
+  max-width: 400px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  z-index: 95;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.stats-view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 8px;
+}
+
+.stats-view-header h4 {
+  margin: 0;
+  color: #0066CC;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.stats-view-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.stats-view-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.stats-view-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stats-section {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.stats-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0066CC;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stats-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.stats-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+.stats-info-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.stats-info-value {
+  color: #333;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.stats-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.stats-summary-item {
+  background: white;
+  border-radius: 4px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.stats-summary-label {
+  font-size: 11px;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.stats-summary-value {
+  font-size: 14px;
+  color: #0066CC;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.channel-stat-card {
+  background: white;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.channel-stat-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0066CC;
+  margin-bottom: 8px;
+}
+
+.channel-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.channel-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  padding: 2px 0;
+}
+
+.channel-stat-label {
+  color: #666;
+}
+
+.channel-stat-value {
+  color: #333;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.stats-loading,
+.stats-error {
+  text-align: center;
+  padding: 20px;
+  font-size: 13px;
+}
+
+.stats-loading {
+  color: #0066CC;
+}
+
+.stats-error {
+  color: #dc3545;
+}
+
+/* Scrollbar for stats view */
+.stats-view::-webkit-scrollbar {
+  width: 6px;
+}
+
+.stats-view::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 3px;
+}
+
+.stats-view::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.stats-view::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
+}
+
+/* Frequency Band Styles */
+.freq-bands-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.freq-band-summary-item {
+  background: white;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.freq-band-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.freq-band-name {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.freq-band-range {
+  font-size: 10px;
+  color: #666;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.freq-band-bar-container {
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.freq-band-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.freq-band-values {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.freq-band-absolute {
+  color: #333;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.freq-band-relative {
+  color: #666;
+  font-weight: 500;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+/* Channel Frequency List */
+.channel-freq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.channel-freq-card {
+  background: white;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.channel-freq-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0066CC;
+  margin-bottom: 10px;
+}
+
+.channel-freq-bands {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.channel-freq-band {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.channel-freq-band-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.channel-freq-band-name {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.channel-freq-band-range {
+  font-size: 9px;
+  color: #666;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.channel-freq-bar-container {
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.channel-freq-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  min-width: 2px;
+}
+
+.channel-freq-values {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+}
+
+.channel-freq-absolute {
+  color: #333;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.channel-freq-relative {
+  color: #666;
+  font-weight: 500;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+/* Scrollbar for channel freq list */
+.channel-freq-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.channel-freq-list::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 3px;
+}
+
+.channel-freq-list::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.channel-freq-list::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
+}
+
+/* Analysis Type Switcher */
+.analysis-type-switcher {
+  position: fixed;
+  top: 70px;
+  right: 340px;
+  display: flex;
+  gap: 4px;
+  background: white;
+  border: 1px solid #DEE2E6;
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 101;
+}
+
+.analysis-type-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #495057;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.analysis-type-btn:hover {
+  background: #F8F9FA;
+}
+
+.analysis-type-btn.active {
+  background: #0066CC;
+  color: white;
+}
+

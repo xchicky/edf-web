@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { getApiUrl } from '../env';
 import type { SignalValidation, SignalComputationResult } from '../types/signal';
+import type {
+  TimeDomainResponse,
+  BandPowerResponse,
+  PSDResponse,
+  ComprehensiveResponse,
+} from '../types/analysis';
 
 const API_BASE = () => getApiUrl('');
 
@@ -110,5 +116,89 @@ export async function calculateSignals(
   });
 
   return response.data.results;
+}
+
+/**
+ * 时域统计分析
+ */
+export async function analyzeTimeDomain(
+  fileId: string,
+  start: number,
+  duration: number,
+  channels?: string[]
+): Promise<TimeDomainResponse> {
+  const response = await axios.post(`${API_BASE()}/analysis/time_domain/${fileId}`, {
+    channels: channels ?? null,
+    start,
+    duration,
+  });
+
+  return response.data;
+}
+
+/**
+ * 频带功率分析
+ */
+export async function analyzeBandPower(
+  fileId: string,
+  start: number,
+  duration: number,
+  channels?: string[],
+  bands?: Record<string, [number, number]>
+): Promise<BandPowerResponse> {
+  const response = await axios.post(`${API_BASE()}/analysis/band_power/${fileId}`, {
+    channels: channels ?? null,
+    start,
+    duration,
+    bands: bands ?? null,
+  });
+
+  return response.data;
+}
+
+/**
+ * PSD 分析
+ */
+export async function analyzePSD(
+  fileId: string,
+  start: number,
+  duration: number,
+  channels?: string[],
+  fmin?: number,
+  fmax?: number
+): Promise<PSDResponse> {
+  const response = await axios.post(`${API_BASE()}/analysis/psd/${fileId}`, {
+    channels: channels ?? null,
+    start,
+    duration,
+    fmin: fmin ?? 0.5,
+    fmax: fmax ?? 50,
+  });
+
+  return response.data;
+}
+
+/**
+ * 综合分析
+ */
+export async function analyzeComprehensive(
+  fileId: string,
+  start: number,
+  duration: number,
+  channels?: string[],
+  fmin?: number,
+  fmax?: number,
+  bands?: Record<string, [number, number]>
+): Promise<ComprehensiveResponse> {
+  const response = await axios.post(`${API_BASE()}/analysis/comprehensive/${fileId}`, {
+    channels: channels ?? null,
+    start,
+    duration,
+    fmin: fmin ?? 0.5,
+    fmax: fmax ?? 50,
+    bands: bands ?? null,
+  });
+
+  return response.data;
 }
 

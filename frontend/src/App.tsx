@@ -1,13 +1,15 @@
 import { useDropzone } from 'react-dropzone';
 import React, { useEffect, useCallback, useState } from 'react';
 import debounce from 'lodash.debounce';
-import { uploadEDF, getWaveform } from './api/edf';
+import { uploadEDF, getWaveform, calculateSignals } from './api/edf';
 import { useEDFStore } from './store/edfStore';
 import { ChannelSelector } from './components/ChannelSelector';
 import { TimeToolbar } from './components/TimeToolbar';
 import { WaveformCanvas } from './components/WaveformCanvas';
 import { SignalEditor } from './components/SignalEditor';
 import { SignalList } from './components/SignalList';
+import { StatsView } from './components/StatsView';
+import { FrequencyView } from './components/FrequencyView';
 
 import { OverviewStrip } from './components/OverviewStrip';
 import { TimeAxis } from './components/TimeAxis';
@@ -31,6 +33,19 @@ function App() {
     isPlaying,
     bookmarks,
     signals,
+    signalData,
+    selectionStart,
+    selectionEnd,
+    isSelecting,
+    hasSelection,
+    analysisResults,
+    isAnalysisLoading,
+    analysisError,
+    selectedAnalysisType,
+    isLeftSidebarCollapsed,
+    isRightSidebarCollapsed,
+    toggleLeftSidebar,
+    toggleRightSidebar,
     setMetadata,
     setWaveform,
     setLoading,
@@ -51,8 +66,14 @@ function App() {
     updateSignal,
     deleteSignal,
     toggleSignal,
+    setSignalDataBatch,
+    clearSignalData,
     loadSignalsFromStorage,
     saveSignalsToStorage,
+    clearSelection,
+    runAnalysis,
+    clearAnalysisResults,
+    setSelectedAnalysisType,
   } = useEDFStore();
 
   // Signal management state
@@ -62,6 +83,7 @@ function App() {
   // Track actual canvas width to match WaveformCanvas and TimeAxis
   const waveformContainerRef = React.useRef<HTMLDivElement>(null);
   const [canvasWidth, setCanvasWidth] = React.useState(800);
+  const [canvasHeight, setCanvasHeight] = React.useState(600);
 
   // Use useLayoutEffect to calculate width BEFORE initial render
   // This ensures TimeAxis and WaveformCanvas have matching widths from the start
@@ -90,9 +112,18 @@ function App() {
     }
   }, [waveform]);
 
-  // Calculate layout parameters for axes
-  const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
-  const channelHeight = waveform ? 600 / waveform.channels.length : 100;
+  // Recalculate canvas width when sidebars collapse/expand
+  // Wait for CSS transition (300ms) to complete before measuring
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if (waveformContainerRef.current) {
+        const width = waveformContainerRef.current.clientWidth - 32;
+        setCanvasWidth(width);
+      }
+    }, 350); // Wait slightly longer than the 300ms transition
+
+    return () => clearTimeout(timer);
+  }, [isLeftSidebarCollapsed, isRightSidebarCollapsed]);
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: { 'application/octet-stream': ['.edf'] },
@@ -157,6 +188,50 @@ function App() {
     }
   };
 
+  // Load derived signals for the current time window
+  const handleLoadDerivedSignals = async () => {
+    if (!metadata) return;
+
+    // Get enabled signals only
+    const enabledSignals = signals.filter(s => s.enabled);
+    if (enabledSignals.length === 0) {
+      // Clear signal data if no signals are enabled
+      clearSignalData();
+      return;
+    }
+
+    try {
+      // Prepare signal data for API
+      const signalsRequest = enabledSignals.map(signal => ({
+        id: signal.id,
+        expression: signal.expression,
+        operands: signal.operands,
+      }));
+
+      // Call the calculateSignals API
+      const results = await calculateSignals(
+        metadata.file_id,
+        signalsRequest,
+        currentTime,
+        windowDuration
+      );
+
+      // Store results in Zustand store
+      setSignalDataBatch(results);
+    } catch (err: any) {
+      console.error('Failed to calculate derived signals:', err);
+      // Don't show error to user - derived signals are optional
+      // Just clear the signal data
+      clearSignalData();
+    }
+  };
+
+  // 处理选择变化
+  const handleSelectionChange = (_start: number | null, _end: number | null) => {
+    // 选择状态已在WaveformCanvas中处理，这里可以添加额外的逻辑
+    // 例如，当用户完成选择时，可以保存到store
+  };
+
   // Debounced version of handleLoadWaveform for rapid pan/zoom operations
   const debouncedLoadWaveform = useCallback(
     debounce(() => {
@@ -177,6 +252,66 @@ function App() {
       debouncedLoadWaveform.cancel();
     };
   }, [currentTime, windowDuration, selectedChannels, metadata, debouncedLoadWaveform]);
+
+  // Debounced version of handleLoadDerivedSignals
+  const debouncedLoadDerivedSignals = useCallback(
+    debounce(() => {
+      if (metadata && signals.length > 0) {
+        handleLoadDerivedSignals();
+      }
+    }, 300),
+    [metadata, currentTime, windowDuration, signals]
+  );
+
+  // Auto-load derived signals when time window or signals change
+  useEffect(() => {
+    if (metadata && signals.length > 0) {
+      debouncedLoadDerivedSignals();
+    }
+
+    return () => {
+      debouncedLoadDerivedSignals.cancel();
+    };
+  }, [currentTime, windowDuration, signals, metadata, debouncedLoadDerivedSignals]);
+
+  // Auto-run analysis when selection changes or analysis type changes
+  useEffect(() => {
+    if (hasSelection && selectionStart !== null && selectionEnd !== null && metadata) {
+      runAnalysis(selectionStart, selectionEnd, selectedAnalysisType);
+    } else {
+      clearAnalysisResults();
+    }
+  }, [hasSelection, selectionStart, selectionEnd, metadata, selectedAnalysisType]);
+
+  // Merge original waveform data with derived signal data
+  const mergedWaveformData = React.useMemo(() => {
+    if (!waveform) return null;
+
+    // Start with original waveform data
+    const mergedData = {
+      ...waveform,
+      data: [...waveform.data],
+      channels: [...waveform.channels],
+    };
+
+    // Add enabled derived signals
+    const enabledSignals = signals.filter(s => s.enabled);
+    enabledSignals.forEach(signal => {
+      const signalResult = signalData.get(signal.id);
+      if (signalResult) {
+        mergedData.data.push(signalResult.data);
+        mergedData.channels.push(signal.name);
+      }
+    });
+
+    return mergedData;
+  }, [waveform, signalData, signals]);
+
+  // Calculate layout parameters for axes
+  const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
+  // Use merged waveform data for channel count (includes derived signals)
+  const actualNumChannels = mergedWaveformData ? mergedWaveformData.channels.length : (waveform ? waveform.channels.length : 10);
+  const channelHeight = mergedWaveformData ? canvasHeight / mergedWaveformData.channels.length : (waveform ? canvasHeight / waveform.channels.length : 100);
 
   // Signal management handlers
   const handleSaveSignal = (signal: any) => {
@@ -364,11 +499,33 @@ function App() {
   }, [metadata, currentTime, windowDuration, amplitudeScale, isPlaying]);
 
   // Channel colors for visualization
-  const channelColors = [
+  const baseChannelColors = [
     '#2196F3', '#4CAF50', '#F44336', '#FF9800', '#9C27B0',
     '#00BCD4', '#8BC34A', '#FF5722', '#673AB7', '#E91E63',
     '#009688', '#CDDC39', '#FFC107', '#03A9F4', '#3F51B5',
   ];
+
+  // Generate colors for all channels (original + derived)
+  const channelColors = React.useMemo(() => {
+    if (!mergedWaveformData) return baseChannelColors;
+
+    const colors = [...baseChannelColors];
+
+    // Add colors for derived signals
+    const enabledSignals = signals.filter(s => s.enabled);
+    enabledSignals.forEach((signal, index) => {
+      // Use custom color if provided, otherwise generate a color
+      if (signal.color) {
+        colors.push(signal.color);
+      } else {
+        // Generate distinct colors for derived signals (starting from index 15)
+        const derivedColorIndex = 15 + index;
+        colors.push(baseChannelColors[derivedColorIndex % baseChannelColors.length]);
+      }
+    });
+
+    return colors;
+  }, [mergedWaveformData, waveform, signals, baseChannelColors]);
 
   return (
     <div className="app">
@@ -429,7 +586,16 @@ function App() {
       </div>
 
       <main className="main-layout">
-        <section className="left-sidebar">
+        <section className={`left-sidebar ${isLeftSidebarCollapsed ? 'collapsed' : ''}`}>
+          <button
+            className="sidebar-toggle"
+            onClick={toggleLeftSidebar}
+            title={isLeftSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+            aria-label={isLeftSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+          >
+            {isLeftSidebarCollapsed ? '→' : '←'}
+          </button>
+
           <div {...getRootProps()} className={`dropzone ${isLoading ? 'loading' : ''}`}>
             <input {...getInputProps()} />
             <p>Drag & drop EDF file here<br/>拖放 EDF 文件到此处</p>
@@ -616,38 +782,29 @@ function App() {
         <section className="waveform-display">
           {waveform && (
             <>
-              <div className="waveform-info-overlay">
-                <div className="info-item">
-                  <span className="label">Resolution:</span>
-                  <span className="value">{metadata?.sfreq || 0} Hz</span>
-                </div>
-                <div className="info-item">
-                  <span className="label">Duration:</span>
-                  <span className="value">{windowDuration}s</span>
-                </div>
-                <div className="info-item">
-                  <span className="label">Window:</span>
-                  <span className="value">{formatTime(currentTime)} - {formatTime(currentTime + windowDuration)}</span>
-                </div>
-              </div>
-
               <div className="waveform-display-container" ref={waveformContainerRef}>
                 <div className="amplitude-axis-wrapper">
-                  <AmplitudeAxis
-                    channelHeight={channelHeight}
-                    numChannels={waveform.channels.length}
-                    amplitudeScale={amplitudeScale}
-                    unit="µV"
-                  />
+                <AmplitudeAxis
+                  channelHeight={channelHeight}
+                  numChannels={actualNumChannels}
+                  amplitudeScale={amplitudeScale}
+                  unit="µV"
+                />
                 </div>
                 <WaveformCanvas
-                  waveformData={waveform}
+                  waveformData={mergedWaveformData || waveform}
                   channelColors={channelColors}
                   currentTime={currentTime}
                   windowDuration={windowDuration}
                   amplitudeScale={amplitudeScale}
                   onTimeChange={setCurrentTime}
                   onAmplitudeChange={setAmplitudeScale}
+                  onHeightChange={setCanvasHeight}
+                  onSelectionChange={handleSelectionChange}
+                  selectionStart={selectionStart}
+                  selectionEnd={selectionEnd}
+                  isSelecting={isSelecting}
+                  hasSelection={hasSelection}
                 />
               </div>
 
@@ -672,7 +829,16 @@ function App() {
           )}
         </section>
 
-        <section className="right-sidebar">
+        <section className={`right-sidebar ${isRightSidebarCollapsed ? 'collapsed' : ''}`}>
+          <button
+            className="sidebar-toggle"
+            onClick={toggleRightSidebar}
+            title={isRightSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+            aria-label={isRightSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+          >
+            {isRightSidebarCollapsed ? '←' : '→'}
+          </button>
+
           {metadata && (
             <>
               <ChannelSelector
@@ -741,6 +907,44 @@ function App() {
             setEditingSignal(null);
           }}
         />
+      )}
+
+      {/* 分析结果视图 */}
+      {(hasSelection || isAnalysisLoading || analysisError) && (
+        <>
+          {/* 分析类型切换器 */}
+          <div className="analysis-type-switcher">
+            <button
+              className={`analysis-type-btn ${selectedAnalysisType === 'stats' ? 'active' : ''}`}
+              onClick={() => setSelectedAnalysisType('stats')}
+            >
+              时域统计
+            </button>
+            <button
+              className={`analysis-type-btn ${selectedAnalysisType === 'frequency' ? 'active' : ''}`}
+              onClick={() => setSelectedAnalysisType('frequency')}
+            >
+              频带功率
+            </button>
+          </div>
+
+          {/* 根据类型显示对应的分析视图 */}
+          {selectedAnalysisType === 'stats' ? (
+            <StatsView
+              results={analysisResults}
+              isLoading={isAnalysisLoading}
+              error={analysisError}
+              onClose={clearAnalysisResults}
+            />
+          ) : (
+            <FrequencyView
+              results={analysisResults}
+              isLoading={isAnalysisLoading}
+              error={analysisError}
+              onClose={clearAnalysisResults}
+            />
+          )}
+        </>
       )}
     </div>
   );

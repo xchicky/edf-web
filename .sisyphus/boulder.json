@@ -1,6 +1,10 @@
 {
   "active_plan": "/Users/yizhang/Workspace/App/edf-web/.sisyphus/plans/eeg-critical-issues-fix.md",
   "started_at": "2026-01-27T02:08:38.417Z",
-  "session_ids": ["ses_414f82f2effenCIqyYusyFchL2"],
+  "session_ids": [
+    "ses_414f82f2effenCIqyYusyFchL2",
+    "ses_3fb53efadffeeDQUHenZOFiHYq",
+    "ses_3f623bdb6ffemHFRy6sxMkRP8r"
+  ],
   "plan_name": "eeg-critical-issues-fix"
 }
