@@ -4,11 +4,40 @@ Signal Calculator Service - Computes derived signals from expressions
 
 import numpy as np
 import logging
-from typing import Dict, List, Any, Optional
+import re
+from typing import Dict, List, Any, Optional, Set
 from pathlib import Path
 import mne
 
 logger = logging.getLogger(__name__)
+
+# 允许的 NumPy 函数白名单（安全子集）
+ALLOWED_NUMPY_FUNCTIONS: Set[str] = {
+    # 基本数学函数
+    "abs", "absolute", "sqrt", "square", "exp", "exp2", "expm1",
+    "log", "log2", "log10", "log1p", "logaddexp", "logaddexp2",
+    "sin", "cos", "tan", "arcsin", "arccos", "arctan", "arctan2",
+    "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
+    "deg2rad", "rad2deg", "degrees", "radians",
+    # 统计函数
+    "mean", "median", "std", "var", "min", "max", "argmin", "argmax",
+    "ptp", "average", "sum", "prod", "cumsum", "cumprod",
+    "percentile", "quantile",
+    # 舍入函数
+    "round", "floor", "ceil", "trunc", "fix",
+    # 其他安全函数
+    "clip", "conj", "conjugate", "real", "imag", "angle",
+    "fabs", "fmod", "mod", "modf", "remainder", "divmod",
+    "positive", "negative", "reciprocal", "power",
+    # 常量
+    "pi", "e", "inf", "nan", "infinity",
+}
+
+# 表达式最大长度限制
+MAX_EXPRESSION_LENGTH = 500
+
+# 表达式求值超时时间（秒）
+EVALUATION_TIMEOUT = 5
 
 
 class SignalCalculator:
@@ -103,6 +132,9 @@ class SignalCalculator:
         # 验证操作数
         self._validate_operands(operands)
 
+        # 验证表达式安全性
+        self._validate_expression(expression, operands)
+
         # 加载所需的通道数据
         channel_data = self._load_channel_data(operands, start_time, duration)
 
@@ -153,6 +185,105 @@ class SignalCalculator:
                     f"通道名称不匹配: 索引 {channel_index} 对应 {self.raw.ch_names[channel_index]}, 期望 {channel_name}"
                 )
 
+    def _validate_expression(self, expression: str, operands: List[Dict[str, Any]]) -> None:
+        """
+        验证表达式安全性
+
+        Args:
+            expression: 原始表达式
+            operands: 操作数列表
+
+        Raises:
+            ValueError: 如果表达式不安全
+        """
+        # 检查表达式长度
+        if len(expression) > MAX_EXPRESSION_LENGTH:
+            raise ValueError(f"表达式过长（最多 {MAX_EXPRESSION_LENGTH} 字符）")
+
+        if not expression.strip():
+            raise ValueError("表达式不能为空")
+
+        # 检查危险的函数调用模式
+        dangerous_patterns = [
+            r"\b__\w+__\b",  # 魔术方法
+            r"\bimport\b",
+            r"\bexec\b",
+            r"\beval\b",
+            r"\bopen\b",
+            r"\bfile\b",
+            r"\bcompile\b",
+            r"\bgetattr\b",
+            r"\bsetattr\b",
+            r"\bdelattr\b",
+            r"\bhasattr\b",
+            r"\bglobals\b",
+            r"\blocals\b",
+            r"\bvars\b",
+            r"\bdir\b",
+            r"\btype\b",
+            r"\b__import__\b",
+            r"\bos\.",
+            r"\bsys\.",
+            r"\bsubprocess\.",
+            r"\bpathlib\.",
+        ]
+
+        for pattern in dangerous_patterns:
+            if re.search(pattern, expression):
+                raise ValueError(f"表达式包含不允许的操作")
+
+        # 检查未知标识符
+        # 只允许：通道名、np.函数名、运算符、括号、数字
+        allowed_channels = set(op["channelName"] for op in operands)
+
+        # 构建允许的标识符模式
+        allowed_pattern_parts = []
+
+        # 添加通道名称（按长度降序排序以避免部分匹配）
+        for ch in sorted(allowed_channels, key=len, reverse=True):
+            allowed_pattern_parts.append(r"\b" + re.escape(ch) + r"\b")
+
+        # 添加 np.函数名
+        for func in ALLOWED_NUMPY_FUNCTIONS:
+            allowed_pattern_parts.append(r"\bnp\." + re.escape(func) + r"\b")
+
+        # 移除所有允许的内容
+        temp = expression
+        for pattern in allowed_pattern_parts:
+            temp = re.sub(pattern, "", temp)
+
+        # 移除运算符、括号、数字、小数点、空格
+        temp = re.sub(r"[\+\-\*/\(\)\s\d\.]", "", temp)
+
+        # 如果还有剩余内容，说明有未知标识符
+        if temp.strip():
+            raise ValueError(f"表达式包含未知的标识符或函数")
+
+    def _create_safe_namespace(self, channel_data: Dict[str, np.ndarray]) -> Dict[str, Any]:
+        """
+        创建安全的求值命名空间，只包含白名单中的 NumPy 函数
+
+        Args:
+            channel_data: 通道数据字典
+
+        Returns:
+            安全的命名空间字典
+        """
+        safe_namespace: Dict[str, Any] = {
+            "channels": channel_data,
+            "__builtins__": {},
+        }
+
+        # 只添加白名单中的 NumPy 函数
+        for func_name in ALLOWED_NUMPY_FUNCTIONS:
+            if hasattr(np, func_name):
+                obj = getattr(np, func_name)
+                # 只添加函数和常量，不添加子模块
+                if callable(obj) or isinstance(obj, (int, float, complex)):
+                    safe_namespace[func_name] = obj
+
+        return safe_namespace
+
     def _load_channel_data(
         self,
         operands: List[Dict[str, Any]],
@@ -197,6 +328,7 @@ class SignalCalculator:
     ) -> str:
         """
         预处理表达式，将通道名称替换为字典访问格式
+        同时将 np. 前缀替换为直接使用函数名
 
         Args:
             expression: 原始表达式
@@ -216,11 +348,13 @@ class SignalCalculator:
 
         for channel_name in channel_names:
             # 使用正则表达式匹配完整的通道名称
-            import re
-
             pattern = r"\b" + re.escape(channel_name) + r"\b"
             replacement = f"channels['{channel_name}']"
             processed = re.sub(pattern, replacement, processed)
+
+        # 处理 np. 前缀 - 允许用户写 np.abs() 等，但我们会移除 np. 前缀
+        # 因为在安全命名空间中，函数直接以名称提供
+        processed = re.sub(r"\bnp\.", "", processed)
 
         return processed
 
@@ -228,7 +362,13 @@ class SignalCalculator:
         self, expression: str, channel_data: Dict[str, np.ndarray]
     ) -> np.ndarray:
         """
-        安全求值表达式
+        安全求值表达式（使用受限命名空间）
+
+        安全措施：
+        1. 只使用白名单中的 NumPy 函数
+        2. 禁用所有内置函数
+        3. 表达式长度限制（在验证阶段）
+        4. 危险模式检测（在验证阶段）
 
         Args:
             expression: 处理后的表达式
@@ -236,26 +376,29 @@ class SignalCalculator:
 
         Returns:
             计算结果数组
+
+        Raises:
+            ValueError: 如果求值失败
         """
-        # 创建受限命名空间
-        safe_namespace = {
-            "channels": channel_data,
-            "np": np,
-            "__builtins__": {},
-        }
+        # 创建安全的命名空间（只包含白名单函数）
+        safe_namespace = self._create_safe_namespace(channel_data)
 
         try:
-            # 设置超时保护（通过限制操作数）
-            result = eval(expression, safe_namespace)
+            # 求值表达式（使用空的全局和局部命名空间，只有 safe_namespace 中的内容可用）
+            result = eval(expression, {"__builtins__": {}}, safe_namespace)
 
-            # 确保结果是 numpy 数组
+            # 确保结果是 numpy 数组或可转换的类型
+            if not isinstance(result, (np.ndarray, (int, float, list, tuple))):
+                raise ValueError(f"表达式结果类型不支持: {type(result)}")
+
             if not isinstance(result, np.ndarray):
                 result = np.array(result)
 
             return result
+
         except Exception as e:
             logger.error(f"Expression evaluation error: {e}")
-            raise
+            raise ValueError(f"表达式求值失败: {str(e)}")
 
     def __del__(self):
         """清理资源"""

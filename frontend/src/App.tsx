@@ -4,6 +4,9 @@ import debounce from 'lodash.debounce';
 import { uploadEDF, getWaveform, calculateSignals } from './api/edf';
 import { useEDFStore } from './store/edfStore';
 import { ChannelSelector } from './components/ChannelSelector';
+import { ModeSelector } from './components/ModeSelector';
+import { ModeEditor } from './components/ModeEditor';
+import { CompatibilityWarning } from './components/CompatibilityWarning';
 import { TimeToolbar } from './components/TimeToolbar';
 import { WaveformCanvas } from './components/WaveformCanvas';
 import { SignalEditor } from './components/SignalEditor';
@@ -44,6 +47,11 @@ function App() {
     selectedAnalysisType,
     isLeftSidebarCollapsed,
     isRightSidebarCollapsed,
+    // 模式管理状态
+    modes,
+    currentModeId,
+    isLoadingModes,
+    modeRecommendations,
     toggleLeftSidebar,
     toggleRightSidebar,
     setMetadata,
@@ -74,11 +82,26 @@ function App() {
     runAnalysis,
     clearAnalysisResults,
     setSelectedAnalysisType,
+    // 模式管理方法
+    loadModes,
+    applyMode,
+    clearMode,
+    updateModeRecommendations,
+    getCurrentMode,
   } = useEDFStore();
 
   // Signal management state
   const [isSignalEditorOpen, setIsSignalEditorOpen] = useState(false);
   const [editingSignal, setEditingSignal] = useState<any>(null);
+
+  // 模式管理状态
+  const [showCompatibilityWarning, setShowCompatibilityWarning] = useState(false);
+  const [pendingModeId, setPendingModeId] = useState<string | null>(null);
+  const [pendingCompatibilityIssues, setPendingCompatibilityIssues] = useState<any[]>([]);
+
+  // 模式编辑器状态
+  const [isModeEditorOpen, setIsModeEditorOpen] = useState(false);
+  const [editingMode, setEditingMode] = useState<any>(null);
 
   // Track actual canvas width to match WaveformCanvas and TimeAxis
   const waveformContainerRef = React.useRef<HTMLDivElement>(null);
@@ -136,6 +159,9 @@ function App() {
       try {
         const result = await uploadEDF(files[0]);
         setMetadata(result as any);
+
+        // Load modes on file load
+        loadModes();
 
         // Load saved signals for this file
         loadSignalsFromStorage(result.file_id);
@@ -283,6 +309,13 @@ function App() {
     }
   }, [hasSelection, selectionStart, selectionEnd, metadata, selectedAnalysisType]);
 
+  // Load and update mode recommendations when metadata changes
+  useEffect(() => {
+    if (metadata && metadata.channel_names.length > 0) {
+      updateModeRecommendations(metadata.channel_names);
+    }
+  }, [metadata, updateModeRecommendations]);
+
   // Merge original waveform data with derived signal data
   const mergedWaveformData = React.useMemo(() => {
     if (!waveform) return null;
@@ -349,6 +382,78 @@ function App() {
   const handleAddNewSignal = () => {
     setEditingSignal(null);
     setIsSignalEditorOpen(true);
+  };
+
+  // 模式管理处理函数
+  const handleModeChange = async (modeId: string | null) => {
+    if (!modeId) {
+      clearMode();
+      return;
+    }
+
+    const mode = modes.find((m) => m.id === modeId);
+    if (!mode) return;
+
+    // 检查兼容性 (使用前端兼容性检查工具)
+    const { checkModeCompatibility } = await import('./utils/modeCompatibilityChecker');
+    const compatibility = checkModeCompatibility(mode, metadata?.channel_names ?? [], metadata?.sfreq ?? 0);
+
+    if (!compatibility.isCompatible) {
+      // 显示兼容性警告
+      setPendingModeId(modeId);
+      setPendingCompatibilityIssues(compatibility.issues);
+      setShowCompatibilityWarning(true);
+    } else {
+      // 直接应用模式
+      try {
+        await applyMode(modeId);
+      } catch (error) {
+        console.error('Failed to apply mode:', error);
+      }
+    }
+  };
+
+  const handleConfirmMode = async () => {
+    if (pendingModeId) {
+      try {
+        await applyMode(pendingModeId);
+        setShowCompatibilityWarning(false);
+        setPendingModeId(null);
+        setPendingCompatibilityIssues([]);
+      } catch (error) {
+        console.error('Failed to apply mode:', error);
+      }
+    }
+  };
+
+  const handleCancelMode = () => {
+    setShowCompatibilityWarning(false);
+    setPendingModeId(null);
+    setPendingCompatibilityIssues([]);
+  };
+
+  // 模式编辑器处理函数
+  const handleCreateMode = () => {
+    setEditingMode(null);
+    setIsModeEditorOpen(true);
+  };
+
+  const handleEditMode = () => {
+    const currentMode = getCurrentMode();
+    setEditingMode(currentMode || null);
+    setIsModeEditorOpen(true);
+  };
+
+  const handleSaveMode = (savedMode: any) => {
+    // 重新加载模式列表
+    loadModes();
+    setIsModeEditorOpen(false);
+    setEditingMode(null);
+  };
+
+  const handleCancelModeEdit = () => {
+    setIsModeEditorOpen(false);
+    setEditingMode(null);
   };
 
   const formatTime = (seconds: number): string => {
@@ -841,6 +946,12 @@ function App() {
 
           {metadata && (
             <>
+              <ModeSelector
+                onModeChange={handleModeChange}
+                onCreateMode={handleCreateMode}
+                onEditMode={handleEditMode}
+              />
+
               <ChannelSelector
                 channels={metadata.channel_names}
                 selectedChannels={selectedChannels}
@@ -908,6 +1019,25 @@ function App() {
           }}
         />
       )}
+
+      {/* 兼容性警告 */}
+      <CompatibilityWarning
+        isOpen={showCompatibilityWarning}
+        issues={pendingCompatibilityIssues}
+        availableSignalCount={metadata?.channel_names.length ?? 0}
+        modeName={modes.find(m => m.id === pendingModeId)?.name ?? 'Unknown Mode'}
+        onConfirm={handleConfirmMode}
+        onCancel={handleCancelMode}
+      />
+
+      {/* 模式编辑器 */}
+      <ModeEditor
+        isOpen={isModeEditorOpen}
+        mode={editingMode}
+        availableChannels={metadata?.channel_names ?? []}
+        onSave={handleSaveMode}
+        onCancel={handleCancelModeEdit}
+      />
 
       {/* 分析结果视图 */}
       {(hasSelection || isAnalysisLoading || analysisError) && (

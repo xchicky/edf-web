@@ -1,0 +1,368 @@
+/* ModeEditor 样式 - 浅色主题 */
+
+.backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: #FFFFFF;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #DEE2E6;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #DEE2E6;
+  background: #F8F9FA;
+  border-radius: 8px 8px 0 0;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #212529;
+  margin: 0;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #6C757D;
+  cursor: pointer;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.closeButton:hover {
+  background: #DEE2E6;
+  color: #212529;
+}
+
+/* Content */
+.content {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.errorMessage {
+  background: #F8D7DA;
+  border: 1px solid #F5C6CB;
+  color: #721C24;
+  padding: 10px 14px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+/* Section */
+.section {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #E9ECEF;
+}
+
+.section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #212529;
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Form */
+.formGroup {
+  margin-bottom: 12px;
+}
+
+.formRow {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.formRow > * {
+  flex: 1;
+}
+
+.label {
+  display: block;
+  font-size: 12px;
+  color: #495057;
+  margin-bottom: 4px;
+}
+
+.required {
+  color: #DC3545;
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 8px 10px;
+  background: #FFFFFF;
+  border: 1px solid #CED4DA;
+  border-radius: 4px;
+  color: #212529;
+  font-size: 13px;
+  transition: border-color 0.15s;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: #0066CC;
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 50px;
+  font-family: inherit;
+}
+
+.error {
+  display: block;
+  font-size: 11px;
+  color: #DC3545;
+  margin-top: 3px;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #495057;
+  cursor: pointer;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+/* Buttons */
+.button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.saveButton {
+  background: #0066CC;
+  color: #FFFFFF;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: #0052A3;
+}
+
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancelButton {
+  background: #F8F9FA;
+  color: #495057;
+  border: 1px solid #CED4DA;
+}
+
+.cancelButton:hover:not(:disabled) {
+  background: #E9ECEF;
+  color: #212529;
+}
+
+.textButton {
+  background: none;
+  border: none;
+  color: #0066CC;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 3px;
+}
+
+.textButton:hover {
+  background: rgba(0, 102, 204, 0.08);
+}
+
+.addButton {
+  background: rgba(0, 102, 204, 0.1);
+  color: #0066CC;
+  border: 1px solid rgba(0, 102, 204, 0.3);
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.addButton:hover {
+  background: rgba(0, 102, 204, 0.15);
+}
+
+.buttonGroup {
+  display: flex;
+  gap: 6px;
+}
+
+/* Channel Grid */
+.channelGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.channelCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #F8F9FA;
+  border: 1px solid #DEE2E6;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #495057;
+  transition: all 0.15s;
+}
+
+.channelCheckbox:hover {
+  background: #E9ECEF;
+}
+
+.channelCheckbox input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+
+.channelCheckbox input:checked + span {
+  color: #212529;
+  font-weight: 500;
+}
+
+/* Signal Editor */
+.signalEditor {
+  background: #F8F9FA;
+  border: 1px solid #0066CC;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+/* Signal List */
+.signalList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.signalItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #F8F9FA;
+  border: 1px solid #DEE2E6;
+  border-radius: 6px;
+}
+
+.signalInfo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.signalColor {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.signalName {
+  font-size: 13px;
+  font-weight: 500;
+  color: #212529;
+}
+
+.signalExpression {
+  font-size: 11px;
+  color: #6C757D;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+.signalDisabled {
+  font-size: 11px;
+  color: #ADB5BD;
+  font-style: italic;
+}
+
+.signalActions {
+  display: flex;
+  gap: 4px;
+}
+
+.emptyText {
+  text-align: center;
+  padding: 20px;
+  color: #6C757D;
+  font-size: 13px;
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid #DEE2E6;
+  background: #F8F9FA;
+  border-radius: 0 0 8px 8px;
+}

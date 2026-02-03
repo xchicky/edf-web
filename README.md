@@ -15,6 +15,9 @@ A web application for reading and visualizing EEG data from EDF files.
 ✅ **派生信号** - 支持自定义信号表达式计算
 ✅ **选区分析** - 时域统计分析 (均值/标准差/RMS/峰度/偏度)
 ✅ **频带分析** - EEG 频带功率分析 (Delta/Theta/Alpha/Beta/Gamma)
+✅ **模式管理** - 预配置分析方案 (临床/科研/教学/自定义)
+✅ **智能推荐** - 基于文件特征的模式推荐系统
+✅ **兼容性检查** - 自动验证模式与文件的兼容性
 ✅ **高测试覆盖率** - 前端 85%+，后端 80%+ 测试覆盖率  
 
 ## 快速开始 (Quick Start)
@@ -298,6 +301,15 @@ edf-web/
 | `/api/analysis/time-domain` | POST | 时域分析 |
 | `/api/analysis/band-power` | POST | 频带功率分析 |
 | `/api/analysis/comprehensive` | POST | 综合分析 |
+| `/api/modes/` | GET | 获取所有模式 |
+| `/api/modes/` | POST | 创建新模式 |
+| `/api/modes/{id}` | GET | 获取模式详情 |
+| `/api/modes/{id}` | PUT | 更新模式 |
+| `/api/modes/{id}` | DELETE | 删除模式 |
+| `/api/modes/check-compatibility` | POST | 检查模式兼容性 |
+| `/api/modes/recommend` | POST | 获取推荐模式 |
+| `/api/modes/{id}/export` | GET | 导出模式 (JSON) |
+| `/api/modes/import` | POST | 导入模式 |
 
 **请求示例**:
 
@@ -462,6 +474,18 @@ MIT License
 Demo Script - 2026
 
 ## 更新日志 (Changelog)
+
+### v2.2.0 (2026-02-03) - 模式管理系统
+- ✅ 模式管理功能 (CRUD 操作)
+- ✅ 兼容性检查系统 (通道、采样率验证)
+- ✅ 智能推荐算法 (基于文件特征和使用历史)
+- ✅ 模式导入导出 (JSON 格式)
+- ✅ 3 个内置模式 (临床标准/频谱研究/基础教学)
+- ✅ 使用统计追踪 (使用频率、最近使用)
+- ✅ 集成 SignalExpressionBuilder 到模式编辑器
+- ✅ 安全强化 (表达式验证、eval() 安全)
+- ✅ 73+ 后端测试，50+ 前端测试
+- ✅ 完整的类型定义 (Pydantic + TypeScript)
 
 ### v2.1.0 (2026-02-01) - 测试补全 + 数据分析
 - ✅ 测试覆盖率大幅提升 (前端 85%+, 后端 80%+)

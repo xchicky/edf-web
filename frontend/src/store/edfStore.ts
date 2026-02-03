@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import type { Signal, SignalComputationResult } from '../types/signal';
 import type { AnalysisResult, AnalysisType, TimeDomainStats, BandPowerResult } from '../types/analysis';
+import type { Mode, ModeCategory, ModeListResponse, CompatibilityCheckResult } from '../types/mode';
 import { loadSignals, saveSignals } from '../utils/signalStorage';
 import { analyzeTimeDomain, analyzeBandPower } from '../api/edf';
+import { getAllModes, checkModeCompatibility, recordModeUsage } from '../api/mode';
 import { computeTimeDomainStats, findClosestIndex, computeBandPowers } from '../utils/statsCalculator';
 
 export interface EDFMetadata {
@@ -72,6 +74,12 @@ interface EDFStore {
   isLeftSidebarCollapsed: boolean;
   isRightSidebarCollapsed: boolean;
 
+  // 模式管理状态
+  modes: Mode[];
+  currentModeId: string | null;
+  modeRecommendations: ModeListResponse | null;
+  isLoadingModes: boolean;
+
   setMetadata: (metadata: EDFMetadata) => void;
   setWaveform: (waveform: WaveformData) => void;
   setCurrentTime: (time: number) => void;
@@ -122,6 +130,22 @@ interface EDFStore {
   toggleLeftSidebar: () => void;
   toggleRightSidebar: () => void;
 
+  // 模式管理方法
+  setModes: (modes: Mode[]) => void;
+  setCurrentModeId: (modeId: string | null) => void;
+  setModeRecommendations: (recommendations: ModeListResponse | null) => void;
+  loadModes: () => Promise<void>;
+  applyMode: (modeId: string) => Promise<void>;
+  clearMode: () => void;
+  updateModeRecommendations: (availableChannels: string[]) => Promise<void>;
+  incrementModeUsage: (modeId: string) => Promise<void>;
+  getCurrentMode: () => Mode | undefined;
+  getModeById: (modeId: string) => Mode | undefined;
+  getModesByCategory: (category: ModeCategory) => Mode[];
+  getFavoriteModes: () => Mode[];
+  getBuiltInModes: () => Mode[];
+  getRecentlyUsedModes: (limit?: number) => Mode[];
+
   reset: () => void;
 }
 
@@ -155,6 +179,12 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
   isLeftSidebarCollapsed: typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function' ? localStorage.getItem('sidebarLeftCollapsed') === 'true' : false,
   isRightSidebarCollapsed: typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function' ? localStorage.getItem('sidebarRightCollapsed') === 'true' : false,
 
+  // 模式管理状态
+  modes: [],
+  currentModeId: null,
+  modeRecommendations: null,
+  isLoadingModes: false,
+
   setMetadata: (metadata) => set({ metadata }),
   setWaveform: (waveform) => set({ waveform }),
   setCurrentTime: (currentTime) => set({ currentTime }),
@@ -183,7 +213,7 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
   addBookmark: (label, time) => {
     const { bookmarks } = get();
     const newBookmark: Bookmark = {
-      id: `bookmark-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `bookmark-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
       label,
       time,
       createdAt: Date.now(),
@@ -443,6 +473,204 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
     }
   },
 
+  // 模式管理方法
+  setModes: (modes) => set({ modes }),
+  setCurrentModeId: (modeId) => set({ currentModeId: modeId }),
+  setModeRecommendations: (recommendations) => set({ modeRecommendations: recommendations }),
+
+  loadModes: async () => {
+    set({ isLoadingModes: true });
+    try {
+      const response = await getAllModes();
+      set({
+        modes: response.modes,
+        isLoadingModes: false,
+      });
+    } catch (error) {
+      console.error('Failed to load modes:', error);
+      set({
+        modes: [],
+        isLoadingModes: false,
+      });
+    }
+  },
+
+  applyMode: async (modeId) => {
+    const { modes, metadata } = get();
+
+    // 查找模式
+    const mode = modes.find((m) => m.id === modeId);
+    if (!mode) {
+      throw new Error(`模式 ${modeId} 不存在`);
+    }
+
+    // 检查兼容性
+    let compatibility: CompatibilityCheckResult;
+    try {
+      compatibility = await checkModeCompatibility(
+        modeId,
+        metadata?.channel_names ?? [],
+        metadata?.sfreq ?? 0
+      );
+    } catch (error) {
+      // 如果 API 调用失败，使用前端兼容性检查
+      const requiredChannels = mode.requiredChannels ?? [];
+      const missingChannels = requiredChannels.filter(
+        (c) => !metadata?.channel_names.includes(c)
+      );
+
+      compatibility = {
+        isCompatible: missingChannels.length === 0,
+        issues: missingChannels.length > 0
+          ? [
+              {
+                type: 'missing_channel',
+                severity: 'error',
+                message: `缺失必需通道: ${missingChannels.join(', ')}`,
+                suggestion: `请添加以下通道: ${missingChannels.join(', ')}`,
+              },
+            ]
+          : [],
+        warnings: [],
+        canApplyWithFixes: missingChannels.length === 0,
+      };
+    }
+
+    if (!compatibility.isCompatible) {
+      throw new Error('模式不兼容');
+    }
+
+    // 应用模式配置
+    const config = mode.config;
+
+    // 清除现有派生信号
+    set({
+      signals: [],
+      signalData: new Map(),
+    });
+
+    // 应用模式中的派生信号配置
+    if (config.signals && config.signals.length > 0) {
+      const modeSignals: Signal[] = config.signals.map((s) => ({
+        ...s,
+        createdAt: Date.now(),
+        modifiedAt: Date.now(),
+      }));
+      set({ signals: modeSignals });
+
+      // 保存到 localStorage
+      if (metadata) {
+        saveSignals(metadata.file_id, modeSignals);
+      }
+    }
+
+    // 应用通道配置
+    if (config.displayChannels.length > 0) {
+      const channelIndices = config.displayChannels
+        .filter((dc) => dc.visible)
+        .map((dc) => dc.channelIndex);
+      set({ selectedChannels: channelIndices });
+    }
+
+    // 应用视图配置
+    set({
+      windowDuration: config.timeWindow,
+      amplitudeScale: config.amplitudeScale,
+    });
+
+    // 设置当前模式
+    set({ currentModeId: modeId });
+
+    // 记录使用
+    try {
+      await recordModeUsage(modeId);
+    } catch (error) {
+      console.warn('Failed to record mode usage:', error);
+    }
+  },
+
+  clearMode: () => {
+    set({
+      currentModeId: null,
+    });
+  },
+
+  updateModeRecommendations: async (availableChannels) => {
+    const { modes, metadata } = get();
+
+    // 过滤兼容的模式
+    const compatibleModes: Mode[] = [];
+
+    for (const mode of modes) {
+      try {
+        const compatibility = await checkModeCompatibility(
+          mode.id,
+          availableChannels,
+          metadata?.sfreq ?? 0
+        );
+
+        if (compatibility.isCompatible) {
+          compatibleModes.push(mode);
+        }
+      } catch (error) {
+        console.warn(`Failed to check compatibility for mode ${mode.id}:`, error);
+      }
+    }
+
+    const categories = Array.from(
+      new Set(compatibleModes.map((m) => m.category))
+    ) as ModeCategory[];
+
+    set({
+      modeRecommendations: {
+        modes: compatibleModes,
+        total: compatibleModes.length,
+        categories,
+      },
+    });
+  },
+
+  incrementModeUsage: async (modeId) => {
+    try {
+      await recordModeUsage(modeId);
+    } catch (error) {
+      console.warn('Failed to record mode usage:', error);
+    }
+  },
+
+  getCurrentMode: () => {
+    const { modes, currentModeId } = get();
+    return modes.find((m) => m.id === currentModeId);
+  },
+
+  getModeById: (modeId) => {
+    const { modes } = get();
+    return modes.find((m) => m.id === modeId);
+  },
+
+  getModesByCategory: (category) => {
+    const { modes } = get();
+    return modes.filter((m) => m.category === category);
+  },
+
+  getFavoriteModes: () => {
+    const { modes } = get();
+    return modes.filter((m) => m.isFavorite);
+  },
+
+  getBuiltInModes: () => {
+    const { modes } = get();
+    return modes.filter((m) => m.isBuiltIn);
+  },
+
+  getRecentlyUsedModes: (limit = 10) => {
+    const { modes } = get();
+    return modes
+      .filter((m) => m.lastUsedAt !== undefined)
+      .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))
+      .slice(0, limit);
+  },
+
   reset: () =>
     set({
       metadata: null,
@@ -464,5 +692,9 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
       isAnalysisLoading: false,
       analysisError: null,
       selectedAnalysisType: 'stats',
+      modes: [],
+      currentModeId: null,
+      modeRecommendations: null,
+      isLoadingModes: false,
     }),
 }));

@@ -3,7 +3,7 @@
  * 用于可视化构建信号表达式
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { validateExpression } from '../utils/expressionParser';
 import styles from './SignalExpressionBuilder.module.css';
 
@@ -22,6 +22,14 @@ export const SignalExpressionBuilder: React.FC<SignalExpressionBuilderProps> = (
 }) => {
   const [showBuilder, setShowBuilder] = useState(false);
 
+  // 使用 ref 保存最新的回调函数
+  const onValidationChangeRef = useRef(onValidationChange);
+
+  // 更新 ref 当回调函数改变时
+  useEffect(() => {
+    onValidationChangeRef.current = onValidationChange;
+  }, [onValidationChange]);
+
   // 验证表达式
   const validation = useMemo(() => {
     if (!expression.trim()) {
@@ -31,14 +39,24 @@ export const SignalExpressionBuilder: React.FC<SignalExpressionBuilderProps> = (
   }, [expression, channelNames]);
 
   React.useEffect(() => {
-    onValidationChange?.(validation.isValid);
-  }, [validation.isValid, onValidationChange]);
+    onValidationChangeRef.current?.(validation.isValid);
+  }, [validation.isValid]);
 
   const handleAddChannel = (channelName: string) => {
     if (!expression.trim()) {
       onExpressionChange(channelName);
     } else {
-      onExpressionChange(`${expression} + ${channelName}`);
+      // 智能判断是否需要添加运算符
+      const trimmedExpression = expression.trim();
+      const lastChar = trimmedExpression[trimmedExpression.length - 1];
+      const operators = ['+', '-', '*', '/'];
+      const needsOperator = !operators.includes(lastChar);
+
+      if (needsOperator) {
+        onExpressionChange(`${trimmedExpression} + ${channelName}`);
+      } else {
+        onExpressionChange(`${trimmedExpression} ${channelName}`);
+      }
     }
   };
 
