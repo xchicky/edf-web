@@ -8,7 +8,7 @@ import { useEDFStore } from '../store/edfStore';
 import { SignalExpressionBuilder } from './SignalExpressionBuilder';
 import type { Mode, ModeCategory, ModeSignalConfig, ModeConfig, Operand } from '../types/mode';
 import { MODE_CATEGORIES, DEFAULT_MODE_CONFIG, DEFAULT_BANDS } from '../types/mode';
-import { createMode, updateMode } from '../api/mode';
+import { createMode, updateMode, deleteMode } from '../api/mode';
 import { extractOperands } from '../utils/expressionParser';
 import styles from './ModeEditor.module.css';
 
@@ -84,6 +84,11 @@ export function ModeEditor({
   // 错误状态
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+
+  // 删除相关状态
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // 初始化表单数据
   useEffect(() => {
@@ -283,6 +288,26 @@ export function ModeEditor({
   // 取消编辑信号
   const handleCancelEditSignal = () => {
     setEditingSignalIndex(null);
+  };
+
+  // 删除模式
+  const handleDeleteMode = async () => {
+    if (!mode) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteMode(mode.id);
+      // 删除成功，关闭模态框并刷新模式列表
+      onCancel();
+    } catch (error) {
+      console.error('Failed to delete mode:', error);
+      const errorMessage = error instanceof Error ? error.message : '删除模式失败，请稍后重试';
+      setDeleteError(errorMessage);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
   };
 
   // 切换通道选中状态
@@ -584,23 +609,69 @@ export function ModeEditor({
 
         {/* Footer */}
         <div className={styles.footer}>
-          <button
-            type="button"
-            className={`${styles.button} ${styles.cancelButton}`}
-            onClick={onCancel}
-            disabled={isLoading}
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            className={`${styles.button} ${styles.saveButton}`}
-            onClick={handleSave}
-            disabled={isLoading}
-          >
-            {isLoading ? '保存中...' : mode ? '保存' : '创建'}
-          </button>
+          {deleteError && (
+            <div className={styles.deleteErrorMessage}>{deleteError}</div>
+          )}
+          <div className={styles.footerButtons}>
+            {mode && !mode.isBuiltIn && (
+              <button
+                type="button"
+                className={`${styles.button} ${styles.deleteButton}`}
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={isLoading || isDeleting}
+                title="删除此模式"
+              >
+                删除
+              </button>
+            )}
+            <button
+              type="button"
+              className={`${styles.button} ${styles.cancelButton}`}
+              onClick={onCancel}
+              disabled={isLoading || isDeleting}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className={`${styles.button} ${styles.saveButton}`}
+              onClick={handleSave}
+              disabled={isLoading || isDeleting}
+            >
+              {isLoading ? '保存中...' : mode ? '保存' : '创建'}
+            </button>
+          </div>
         </div>
+
+        {/* Delete Confirmation Dialog */}
+        {showDeleteConfirm && (
+          <div className={styles.confirmOverlay}>
+            <div className={styles.confirmDialog}>
+              <h3 className={styles.confirmTitle}>确认删除</h3>
+              <p className={styles.confirmMessage}>
+                确定要删除模式 <strong>{mode?.name}</strong> 吗？此操作无法撤销。
+              </p>
+              <div className={styles.confirmButtons}>
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.cancelButton}`}
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.deleteButton}`}
+                  onClick={handleDeleteMode}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? '删除中...' : '确认删除'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

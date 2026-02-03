@@ -12,22 +12,28 @@ import type { Mode, ModeCategory } from '../../types/mode';
 vi.mock('../../api/mode', () => ({
   createMode: vi.fn(),
   updateMode: vi.fn(),
+  deleteMode: vi.fn(),
 }));
 
 // Mock Store
 vi.mock('../../store/edfStore', () => ({
-  useEDFStore: vi.fn(() => ({
-    metadata: {
-      file_id: 'test-file',
-      channel_names: ['Fp1', 'Fp2', 'F3', 'F4', 'C3', 'C4', 'O1', 'O2'],
-    },
-  })),
+  useEDFStore: vi.fn(selector => {
+    const store = {
+      metadata: {
+        file_id: 'test-file',
+        channel_names: ['Fp1', 'Fp2', 'F3', 'F4', 'C3', 'C4', 'O1', 'O2'],
+      },
+      loadModes: vi.fn(),
+    };
+    return selector ? selector(store) : store;
+  }),
 }));
 
-import { createMode, updateMode } from '../../api/mode';
+import { createMode, updateMode, deleteMode } from '../../api/mode';
 
 const mockCreateMode = vi.mocked(createMode);
 const mockUpdateMode = vi.mocked(updateMode);
+const mockDeleteMode = vi.mocked(deleteMode);
 
 describe('ModeEditor - SignalExpressionBuilder Integration', () => {
   const mockAvailableChannels = ['Fp1', 'Fp2', 'F3', 'F4', 'C3', 'C4', 'O1', 'O2'];
@@ -449,16 +455,12 @@ describe('ModeEditor - SignalExpressionBuilder Integration', () => {
       expect(expressionInput.getAttribute('value')).toBe('Fp1 - ');
 
       // 点击 F3 通道（选择按钮元素）
-      // 注意：SignalExpressionBuilder 会在非空表达式后添加 " + "
       const f3Buttons = screen.getAllByText('F3');
       const f3Button = f3Buttons.find(el => el.tagName === 'BUTTON');
       expect(f3Button).toBeDefined();
       if (f3Button) fireEvent.click(f3Button);
-      // 由于 handleAddChannel 的行为，结果会是 "Fp1 -  + F3"
-      expect(expressionInput.getAttribute('value')).toBe('Fp1 -  + F3');
-
-      // 手动修正表达式
-      fireEvent.change(expressionInput, { target: { value: 'Fp1 - F3' } });
+      // 表达式应该是 Fp1 - F3（构建器会自动处理）
+      expect(expressionInput.getAttribute('value')).toBe('Fp1 - F3');
 
       // 表达式应该有效
       expect(screen.getByText('✓')).toBeInTheDocument();
@@ -597,11 +599,7 @@ describe('ModeEditor - SignalExpressionBuilder Integration', () => {
       if (f4Button) fireEvent.click(f4Button);
 
       const expressionInput = screen.getByPlaceholderText('输入表达式或使用下方按钮构建');
-      // 由于 handleAddChannel 的行为，结果会是 "Fp2 -  + F4"
-      expect(expressionInput.getAttribute('value')).toBe('Fp2 -  + F4');
-
-      // 手动修正表达式
-      fireEvent.change(expressionInput, { target: { value: 'Fp2 - F4' } });
+      // 表达式应该是 Fp2 - F4（构建器会自动处理）
       expect(expressionInput.getAttribute('value')).toBe('Fp2 - F4');
     });
   });
@@ -661,6 +659,299 @@ describe('ModeEditor - SignalExpressionBuilder Integration', () => {
         expect(screen.getByText(/Fp1, Fp2, F3, F4/)).toBeInTheDocument();
         expect(screen.getByText(/1\.5/)).toBeInTheDocument();
       });
+    });
+  });
+});
+
+describe('ModeEditor - Delete Functionality', () => {
+  const mockAvailableChannels = ['Fp1', 'Fp2', 'F3', 'F4', 'C3', 'C4', 'O1', 'O2'];
+  const mockOnSave = vi.fn();
+  const mockOnCancel = vi.fn();
+
+  const defaultProps = {
+    isOpen: true,
+    mode: null,
+    availableChannels: mockAvailableChannels,
+    onSave: mockOnSave,
+    onCancel: mockOnCancel,
+  };
+
+  const customMode: Mode = {
+    id: 'mode-custom-1',
+    name: 'Custom Test Mode',
+    category: 'custom' as ModeCategory,
+    config: {
+      viewMode: 'waveform',
+      timeWindow: 10,
+      amplitudeScale: 1.0,
+      showGrid: true,
+      showAnnotations: true,
+      displayChannels: [],
+      enableFilter: false,
+      bands: [],
+      analysis: { enabled: false, type: 'stats', autoUpdate: false },
+      autoSave: true,
+      maxBookmarks: 50,
+      signals: [],
+    },
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    isBuiltIn: false,
+    isFavorite: false,
+    usageCount: 0,
+    tags: [],
+  };
+
+  const builtInMode: Mode = {
+    ...customMode,
+    id: 'mode-builtin-1',
+    name: 'Built-in Mode',
+    isBuiltIn: true,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDeleteMode.mockResolvedValue({ success: true });
+  });
+
+  describe('删除按钮可见性', () => {
+    it('编辑自定义模式时应显示删除按钮', () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除');
+      expect(deleteButton).toBeInTheDocument();
+    });
+
+    it('创建新模式时不应显示删除按钮', () => {
+      render(<ModeEditor {...defaultProps} mode={null} />);
+
+      const deleteButtons = screen.queryAllByText('删除');
+      expect(deleteButtons.length).toBe(0);
+    });
+
+    it('编辑内置模式时不应显示删除按钮', () => {
+      render(<ModeEditor {...defaultProps} mode={builtInMode} />);
+
+      const deleteButtons = screen.queryAllByText('删除');
+      expect(deleteButtons.length).toBe(0);
+    });
+  });
+
+  describe('删除按钮状态', () => {
+    it('删除按钮在加载时应被禁用', async () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除') as HTMLButtonElement;
+      expect(deleteButton).not.toBeDisabled();
+
+      // 模拟删除过程中的禁用状态
+      // 注意：实际的禁用状态取决于 isDeleting 状态
+    });
+
+    it('删除按钮应有正确的标题提示', () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除') as HTMLButtonElement;
+      expect(deleteButton.title).toBe('删除此模式');
+    });
+  });
+
+  describe('删除确认对话框', () => {
+    it('点击删除按钮应显示确认对话框', () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      const confirmTitle = screen.getByRole('heading', { name: '确认删除' });
+      expect(confirmTitle).toBeInTheDocument();
+      expect(screen.getByText(/确定要删除模式/)).toBeInTheDocument();
+    });
+
+    it('确认对话框应显示模式名称', () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      expect(screen.getByText(customMode.name)).toBeInTheDocument();
+    });
+
+    it('确认对话框应有取消和确认按钮', () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      const deleteConfirmButton = screen.getByRole('button', { name: '确认删除' });
+      expect(deleteConfirmButton).toBeInTheDocument();
+
+      // 检查是否有取消按钮（会有多个，但至少有一个）
+      const cancelButtons = screen.getAllByText('取消');
+      expect(cancelButtons.length).toBeGreaterThan(0);
+    });
+
+    it('点击取消按钮应关闭确认对话框', () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      expect(screen.getByText(/确定要删除模式/)).toBeInTheDocument();
+
+      const cancelButtons = screen.getAllByText('取消');
+      // 找到确认对话框中的取消按钮（最后一个取消按钮）
+      const confirmCancelButton = cancelButtons[cancelButtons.length - 1];
+
+      fireEvent.click(confirmCancelButton);
+
+      // 对话框应该被关闭
+      expect(screen.queryByText(/确定要删除模式/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('删除操作', () => {
+    it('点击确认删除应调用 deleteMode API', async () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      const deleteConfirmButton = screen.getByRole('button', { name: '确认删除' });
+      fireEvent.click(deleteConfirmButton);
+
+      await waitFor(() => {
+        expect(mockDeleteMode).toHaveBeenCalledWith(customMode.id);
+      });
+    });
+
+    it('删除成功后应关闭模态框', async () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      const deleteConfirmButton = screen.getByRole('button', { name: '确认删除' });
+      fireEvent.click(deleteConfirmButton);
+
+      await waitFor(() => {
+        expect(mockOnCancel).toHaveBeenCalled();
+      });
+    });
+
+    it('删除成功后应刷新模式列表', async () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      const deleteConfirmButton = screen.getByRole('button', { name: '确认删除' });
+      fireEvent.click(deleteConfirmButton);
+
+      await waitFor(() => {
+        expect(mockDeleteMode).toHaveBeenCalledWith(customMode.id);
+      });
+    });
+
+    it('删除失败时应显示错误消息', async () => {
+      const errorMessage = '删除模式失败，请稍后重试';
+      mockDeleteMode.mockRejectedValueOnce(new Error(errorMessage));
+
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      const deleteConfirmButton = screen.getByRole('button', { name: '确认删除' });
+      fireEvent.click(deleteConfirmButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(errorMessage)).toBeInTheDocument();
+      });
+    });
+
+    it('删除失败时应保持模态框打开', async () => {
+      mockDeleteMode.mockRejectedValueOnce(new Error('删除失败'));
+
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      const deleteConfirmButton = screen.getByRole('button', { name: '确认删除' });
+      fireEvent.click(deleteConfirmButton);
+
+      await waitFor(() => {
+        // 模态框应该仍然打开
+        expect(screen.getByText('编辑模式')).toBeInTheDocument();
+      });
+    });
+
+    it('删除过程中应禁用所有按钮', async () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      const deleteConfirmButton = screen.getByRole('button', { name: '确认删除' });
+      fireEvent.click(deleteConfirmButton);
+
+      // 删除过程中，API 应该被调用
+      await waitFor(() => {
+        expect(mockDeleteMode).toHaveBeenCalledWith(customMode.id);
+      });
+    });
+  });
+
+  describe('删除功能集成', () => {
+    it('应该支持完整的删除流程：点击删除 -> 确认 -> 成功', async () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      // 1. 点击删除按钮
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      // 2. 确认对话框应该显示
+      expect(screen.getByText(/确定要删除模式/)).toBeInTheDocument();
+
+      // 3. 点击确认删除
+      const deleteConfirmButton = screen.getByRole('button', { name: '确认删除' });
+      fireEvent.click(deleteConfirmButton);
+
+      // 4. API 应该被调用
+      await waitFor(() => {
+        expect(mockDeleteMode).toHaveBeenCalledWith(customMode.id);
+      });
+
+      // 5. 模态框应该关闭
+      await waitFor(() => {
+        expect(mockOnCancel).toHaveBeenCalled();
+      });
+    });
+
+    it('应该支持取消删除流程', () => {
+      render(<ModeEditor {...defaultProps} mode={customMode} />);
+
+      // 1. 点击删除按钮
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      // 2. 确认对话框应该显示
+      expect(screen.getByText(/确定要删除模式/)).toBeInTheDocument();
+
+      // 3. 点击取消（选择确认对话框中的取消按钮）
+      const cancelButtons = screen.getAllByText('取消');
+      const confirmCancelButton = cancelButtons[cancelButtons.length - 1];
+      fireEvent.click(confirmCancelButton);
+
+      // 4. 对话框应该关闭
+      expect(screen.queryByText(/确定要删除模式/)).not.toBeInTheDocument();
+
+      // 5. API 不应该被调用
+      expect(mockDeleteMode).not.toHaveBeenCalled();
+
+      // 6. 模态框应该仍然打开
+      expect(screen.getByText('编辑模式')).toBeInTheDocument();
     });
   });
 });

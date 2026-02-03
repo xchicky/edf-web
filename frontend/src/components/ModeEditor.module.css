@@ -215,6 +215,20 @@
   color: #212529;
 }
 
+.deleteButton {
+  background: #DC3545;
+  color: #FFFFFF;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: #C82333;
+}
+
+.deleteButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .textButton {
   background: none;
   border: none;
@@ -356,13 +370,76 @@
   font-size: 13px;
 }
 
+/* Confirmation Dialog */
+.confirmOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+}
+
+.confirmDialog {
+  background: #FFFFFF;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 24px;
+  max-width: 400px;
+  border: 1px solid #DEE2E6;
+}
+
+.confirmTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #212529;
+  margin: 0 0 12px;
+}
+
+.confirmMessage {
+  font-size: 13px;
+  color: #495057;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.confirmMessage strong {
+  color: #212529;
+  font-weight: 600;
+}
+
+.confirmButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 /* Footer */
 .footer {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
   gap: 10px;
   padding: 16px 20px;
   border-top: 1px solid #DEE2E6;
   background: #F8F9FA;
   border-radius: 0 0 8px 8px;
+}
+
+.deleteErrorMessage {
+  background: #F8D7DA;
+  border: 1px solid #F5C6CB;
+  color: #721C24;
+  padding: 10px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.footerButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
