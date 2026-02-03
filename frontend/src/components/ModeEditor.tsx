@@ -39,6 +39,11 @@ export interface ModeEditorProps {
   onCancel: () => void;
 
   /**
+   * 删除回调
+   */
+  onDelete?: (modeId: string) => void;
+
+  /**
    * 自定义类名
    */
   className?: string;
@@ -50,6 +55,7 @@ export function ModeEditor({
   availableChannels,
   onSave,
   onCancel,
+  onDelete,
   className = '',
 }: ModeEditorProps) {
   const { metadata } = useEDFStore();
@@ -298,7 +304,8 @@ export function ModeEditor({
     setDeleteError(null);
     try {
       await deleteMode(mode.id);
-      // 删除成功，关闭模态框并刷新模式列表
+      // 删除成功，调用 onDelete 回调
+      onDelete?.(mode.id);
       onCancel();
     } catch (error) {
       console.error('Failed to delete mode:', error);

@@ -953,5 +953,49 @@ describe('ModeEditor - Delete Functionality', () => {
       // 6. 模态框应该仍然打开
       expect(screen.getByText('编辑模式')).toBeInTheDocument();
     });
+
+    it('删除成功后应调用 onDelete 回调', async () => {
+      const mockOnDelete = vi.fn();
+      render(
+        <ModeEditor
+          {...defaultProps}
+          mode={customMode}
+          onDelete={mockOnDelete}
+        />
+      );
+
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      const deleteConfirmButton = screen.getByRole('button', { name: '确认删除' });
+      fireEvent.click(deleteConfirmButton);
+
+      await waitFor(() => {
+        expect(mockOnDelete).toHaveBeenCalledWith(customMode.id);
+      });
+    });
+
+    it('删除失败时不应调用 onDelete 回调', async () => {
+      const mockOnDelete = vi.fn();
+      mockDeleteMode.mockRejectedValueOnce(new Error('删除失败'));
+
+      render(
+        <ModeEditor
+          {...defaultProps}
+          mode={customMode}
+          onDelete={mockOnDelete}
+        />
+      );
+
+      const deleteButton = screen.getByText('删除');
+      fireEvent.click(deleteButton);
+
+      const deleteConfirmButton = screen.getByRole('button', { name: '确认删除' });
+      fireEvent.click(deleteConfirmButton);
+
+      await waitFor(() => {
+        expect(mockOnDelete).not.toHaveBeenCalled();
+      });
+    });
   });
 });

@@ -451,6 +451,15 @@ function App() {
     setEditingMode(null);
   };
 
+  const handleDeleteMode = async (modeId: string) => {
+    // 如果删除的是当前选中的模式，清除选中状态
+    if (currentModeId === modeId) {
+      clearMode();
+    }
+    // 重新加载模式列表
+    loadModes();
+  };
+
   const handleCancelModeEdit = () => {
     setIsModeEditorOpen(false);
     setEditingMode(null);
@@ -1037,6 +1046,7 @@ function App() {
         availableChannels={metadata?.channel_names ?? []}
         onSave={handleSaveMode}
         onCancel={handleCancelModeEdit}
+        onDelete={handleDeleteMode}
       />
 
       {/* 分析结果视图 */}
