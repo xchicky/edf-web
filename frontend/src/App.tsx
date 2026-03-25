@@ -1,3 +1,4 @@
+// edf-web v1.0
 import { useDropzone } from 'react-dropzone';
 import React, { useEffect, useCallback, useState } from 'react';
 import debounce from 'lodash.debounce';
