@@ -109,6 +109,49 @@ function App() {
   const [canvasWidth, setCanvasWidth] = React.useState(800);
   const [canvasHeight, setCanvasHeight] = React.useState(600);
 
+  // Dev-only: auto-load demo.edf for easier development testing
+  // TODO: Remove this block before production deployment
+  useEffect(() => {
+    // Skip in test environment to avoid fetch errors
+    if (import.meta.env.MODE === 'test' || process.env.NODE_ENV === 'test') {
+      return;
+    }
+
+    const autoLoadDemo = async () => {
+      try {
+        const response = await fetch('/edf/demo.edf');
+        if (!response.ok) return; // File not available, skip silently
+
+        const blob = await response.blob();
+        const file = new File([blob], 'demo.edf', { type: 'application/octet-stream' });
+
+        // Reuse the same logic as dropzone onDrop
+        reset();
+        setLoading(true);
+        setError(null);
+
+        const result = await uploadEDF(file);
+        setMetadata(result as any);
+        loadModes();
+        loadSignalsFromStorage(result.file_id);
+
+        const initialChannels = Array.from(
+          { length: Math.min(10, result.n_channels) },
+          (_, i) => i
+        );
+        const waveformData = await getWaveform(result.file_id, 0, windowDuration, initialChannels);
+        setWaveform(waveformData);
+      } catch (err) {
+        // Silently fail - this is a dev convenience feature
+        console.warn('Auto-load demo.edf failed:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    autoLoadDemo();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Use useLayoutEffect to calculate width BEFORE initial render
   // This ensures TimeAxis and WaveformCanvas have matching widths from the start
   React.useLayoutEffect(() => {
