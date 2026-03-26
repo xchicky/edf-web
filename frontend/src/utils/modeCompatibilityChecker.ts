@@ -146,7 +146,7 @@ export function getCompatibilityIssueMessage(issue: CompatibilityIssue): string 
 /**
  * 检查是否可以自动修复兼容性问题
  */
-export function canAutoFix(issue: CompatibilityIssue): boolean {
+export function canAutoFix(_issue: CompatibilityIssue): boolean {
   // 目前所有问题都需要手动修复
   return false;
 }

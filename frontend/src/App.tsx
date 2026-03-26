@@ -51,8 +51,6 @@ function App() {
     // 模式管理状态
     modes,
     currentModeId,
-    isLoadingModes,
-    modeRecommendations,
     toggleLeftSidebar,
     toggleRightSidebar,
     setMetadata,
@@ -79,7 +77,6 @@ function App() {
     clearSignalData,
     loadSignalsFromStorage,
     saveSignalsToStorage,
-    clearSelection,
     runAnalysis,
     clearAnalysisResults,
     setSelectedAnalysisType,
@@ -113,7 +110,7 @@ function App() {
   // TODO: Remove this block before production deployment
   useEffect(() => {
     // Skip in test environment to avoid fetch errors
-    if (import.meta.env.MODE === 'test' || process.env.NODE_ENV === 'test') {
+    if (import.meta.env.MODE === 'test') {
       return;
     }
 
@@ -488,7 +485,7 @@ function App() {
     setIsModeEditorOpen(true);
   };
 
-  const handleSaveMode = (savedMode: any) => {
+  const handleSaveMode = (_savedMode: any) => {
     // 重新加载模式列表
     loadModes();
     setIsModeEditorOpen(false);

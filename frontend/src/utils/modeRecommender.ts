@@ -243,9 +243,9 @@ function calculateUsageScore(stats: UsageStats): number {
  */
 function calculateContextualScore(
   mode: Mode,
-  usageStats: UsageStats,
+  _usageStats: UsageStats,
   context: RecommendationContext,
-  compatibility: CompatibilityCheckResult
+  _compatibility: CompatibilityCheckResult
 ): number {
   let score = 0;
 
@@ -386,7 +386,7 @@ function generateRecommendationReasons(
 /**
  * 生成使用历史理由
  */
-function generateUsageReasons(mode: Mode, usageStats: UsageStats): string[] {
+function generateUsageReasons(_mode: Mode, usageStats: UsageStats): string[] {
   const reasons: string[] = [];
 
   if (usageStats.isFavorite) {
