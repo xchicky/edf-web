@@ -6,6 +6,11 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
+def pytest_configure(config):
+    """注册自定义标记"""
+    config.addinivalue_line("markers", "visualize: 可视化测试（需要 matplotlib）")
+
+
 @pytest.fixture
 def client():
     """Create test client for FastAPI app"""
