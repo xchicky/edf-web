@@ -573,3 +573,7 @@ scipy==1.17.0
 **有问题？(Questions?)**
 
 请检查常见问题部分或查阅 MNE-Python 官方文档。
+
+## Author
+
+Kami
