@@ -287,7 +287,7 @@ describe('ModeEditor - SignalExpressionBuilder Integration', () => {
       fireEvent.click(minusButton);
 
       // 表达式应该包含操作符
-      expect(expressionInput.value).toBe('Fp1 - ');
+      expect((expressionInput as HTMLInputElement).value).toBe('Fp1 - ');
     });
 
     it('应该显示括号按钮', () => {
@@ -325,7 +325,7 @@ describe('ModeEditor - SignalExpressionBuilder Integration', () => {
       fireEvent.click(parenButton);
 
       // 表达式应该被括号包装
-      expect(expressionInput.value).toBe('(Fp1 + F3)');
+      expect((expressionInput as HTMLInputElement).value).toBe('(Fp1 + F3)');
     });
 
     it('应该显示清空按钮', () => {
@@ -363,7 +363,7 @@ describe('ModeEditor - SignalExpressionBuilder Integration', () => {
       fireEvent.click(clearButton);
 
       // 表达式应该被清空
-      expect(expressionInput.value).toBe('');
+      expect((expressionInput as HTMLInputElement).value).toBe('');
     });
 
     it('应该显示表达式验证信息（引用的通道）', async () => {
@@ -532,7 +532,7 @@ describe('ModeEditor - SignalExpressionBuilder Integration', () => {
 
       // 应该加载现有表达式
       const expressionInput = screen.getByPlaceholderText('输入表达式或使用下方按钮构建');
-      expect(expressionInput.value).toBe('Fp1 - F3');
+      expect((expressionInput as HTMLInputElement).value).toBe('Fp1 - F3');
 
       // 应该显示有效图标
       expect(screen.getByText('✓')).toBeInTheDocument();

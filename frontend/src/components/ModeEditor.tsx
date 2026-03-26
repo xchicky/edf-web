@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useEDFStore } from '../store/edfStore';
 import { SignalExpressionBuilder } from './SignalExpressionBuilder';
 import type { Mode, ModeCategory, ModeSignalConfig, ModeConfig, Operand } from '../types/mode';
-import { MODE_CATEGORIES, DEFAULT_MODE_CONFIG, DEFAULT_BANDS } from '../types/mode';
+import { MODE_CATEGORIES, DEFAULT_BANDS } from '../types/mode';
 import { createMode, updateMode, deleteMode } from '../api/mode';
 import { extractOperands } from '../utils/expressionParser';
 import styles from './ModeEditor.module.css';
@@ -58,8 +58,6 @@ export function ModeEditor({
   onDelete,
   className = '',
 }: ModeEditorProps) {
-  const { metadata } = useEDFStore();
-
   // 表单状态
   const [name, setName] = useState('');
   const [category, setCategory] = useState<ModeCategory>('custom');
@@ -82,7 +80,6 @@ export function ModeEditor({
   const [editingSignalIndex, setEditingSignalIndex] = useState<number | null>(null);
   const [signalName, setSignalName] = useState('');
   const [signalExpression, setSignalExpression] = useState('');
-  const [signalOperands, setSignalOperands] = useState<Operand[]>([]);
   const [signalColor, setSignalColor] = useState('#ef4444');
   const [signalEnabled, setSignalEnabled] = useState(true);
   const [isExpressionValid, setIsExpressionValid] = useState(false);
@@ -219,7 +216,6 @@ export function ModeEditor({
     setEditingSignalIndex(-1); // -1 表示新建
     setSignalName('');
     setSignalExpression('');
-    setSignalOperands([]);
     setSignalColor('#ef4444');
     setSignalEnabled(true);
     setIsExpressionValid(false);
@@ -231,7 +227,6 @@ export function ModeEditor({
     setEditingSignalIndex(index);
     setSignalName(signal.name);
     setSignalExpression(signal.expression);
-    setSignalOperands(signal.operands);
     setSignalColor(signal.color || '#ef4444');
     setSignalEnabled(signal.enabled);
     // 初始化验证状态（假设已保存的信号都是有效的）

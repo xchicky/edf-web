@@ -238,7 +238,7 @@ describe('CompatibilityWarning', () => {
 
   describe('样式', () => {
     it('应该应用正确的类名', () => {
-      const { container } = render(<CompatibilityWarning {...defaultProps} />);
+      render(<CompatibilityWarning {...defaultProps} />);
 
       const dialog = screen.getByRole('dialog');
       expect(dialog).toBeInTheDocument();
@@ -246,10 +246,10 @@ describe('CompatibilityWarning', () => {
     });
 
     it('应该为错误和警告应用不同样式', () => {
-      const { container } = render(<CompatibilityWarning {...defaultProps} />);
+      render(<CompatibilityWarning {...defaultProps} />);
 
       // 检查是否有错误或警告图标
-      const icons = container.querySelectorAll('[class*="Icon"]');
+      const icons = document.querySelectorAll('[class*="Icon"]');
       expect(icons.length).toBeGreaterThan(0);
     });
   });

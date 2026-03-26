@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ModeSelector } from '../ModeSelector';
 import { useEDFStore } from '../../store/edfStore';
@@ -146,7 +146,6 @@ describe('ModeSelector', () => {
       isRightSidebarCollapsed: false,
       modeRecommendations: null,
       setModes: vi.fn(),
-      setCurrentModeId: vi.fn(),
       setModeRecommendations: vi.fn(),
       loadModes: vi.fn().mockResolvedValue(undefined),
       clearMode: vi.fn(),
@@ -414,7 +413,7 @@ describe('ModeSelector', () => {
 
   describe('样式', () => {
     it('应该应用正确的类名', () => {
-      const { container } = render(<ModeSelector />);
+      render(<ModeSelector />);
 
       const select = screen.getByRole('combobox');
       expect(select).toHaveClass(/selector/i);

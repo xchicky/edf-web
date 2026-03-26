@@ -3,7 +3,7 @@
  * 模式卡片，显示模式信息
  */
 
-import type { Mode, ModeCategory } from '../types/mode';
+import type { Mode } from '../types/mode';
 import { MODE_CATEGORIES } from '../types/mode';
 import styles from './ModeCard.module.css';
 

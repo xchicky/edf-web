@@ -125,7 +125,7 @@ export const EEG_FREQUENCY_BANDS = {
  */
 export function computeBandPowers(
   data: number[],
-  sfreq: number,
+  _sfreq: number,
   bands: Record<string, [number, number]> = EEG_FREQUENCY_BANDS
 ): Record<string, BandPowerResult> {
   const n = data.length;
