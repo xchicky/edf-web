@@ -4,6 +4,9 @@ python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+markers = [
+    "visualize: tests that generate visualization plots (skip in CI)"
+]
 addopts = [
     "-v",
     "--strict-markers",
