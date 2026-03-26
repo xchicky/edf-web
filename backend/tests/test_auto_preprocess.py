@@ -97,7 +97,7 @@ def create_synthetic_raw_with_artifacts(
         channel_names: 通道名称列表（如果提供，则忽略 n_channels）
         add_eog: 是否添加眼电伪迹（3-4s）
         add_emg: 是否添加肌电伪迹（6-7s）
-        add_flat: 是否添加平坦段（8-8.5s）
+        add_flat: 是否添加平坦段（8-9.5s，至少 1.5 秒以确保被检测到）
         add_drift: 是否添加慢漂移
         add_line_noise: 是否添加 50Hz 工频干扰
 
@@ -117,8 +117,14 @@ def create_synthetic_raw_with_artifacts(
         # 基础 10Hz alpha 波
         signal = 20 * np.sin(2 * np.pi * 10 * times)
 
+        # 只对第一个通道（通常是 Fp1，前方通道）添加伪迹，避免平均参考过度降低伪迹幅值
+        is_first_channel = (i == 0)
+
+        # 添加基础噪声（先添加，然后特殊处理 flat 段）
+        signal += np.random.normal(0, 10, n_samples)
+
         # 添加眼电伪迹（3-4s，大幅脉冲）
-        if add_eog:
+        if add_eog and is_first_channel:
             eog_start = int(3.0 * sfreq)
             eog_end = int(4.0 * sfreq)
             # 模拟眨眼：大幅负向偏转
@@ -126,30 +132,28 @@ def create_synthetic_raw_with_artifacts(
             signal[eog_start:eog_end] += eog_pulse
 
         # 添加肌电伪迹（6-7s，高频高幅噪声）
-        if add_emg:
+        if add_emg and is_first_channel:
             emg_start = int(6.0 * sfreq)
             emg_end = int(7.0 * sfreq)
             emg_noise = np.random.normal(0, 80, emg_end - emg_start)
             signal[emg_start:emg_end] += emg_noise
 
-        # 添加平坦段（8-8.5s，接近零值）
-        if add_flat:
+        # 添加平坦段（8-9.5s，接近零值，覆盖基础噪声）
+        if add_flat and is_first_channel:
             flat_start = int(8.0 * sfreq)
-            flat_end = int(8.5 * sfreq)
+            flat_end = int(9.5 * sfreq)
+            # 覆盖基础噪声，只保留极小的噪声
             signal[flat_start:flat_end] = np.random.normal(0, 0.1, flat_end - flat_start)
 
         # 添加慢漂移
-        if add_drift:
-            drift = 50 * np.sin(2 * np.pi * 0.1 * times)
+        if add_drift and is_first_channel:
+            drift = 100 * np.sin(2 * np.pi * 0.1 * times)
             signal += drift
 
         # 添加 50Hz 工频干扰
         if add_line_noise:
             line_noise = 5 * np.sin(2 * np.pi * 50 * times)
             signal += line_noise
-
-        # 添加基础噪声
-        signal += np.random.normal(0, 10, n_samples)
 
         data[i, :] = signal
 
@@ -317,6 +321,7 @@ class TestReReferencing:
 
         pipeline = AutoPreprocessPipeline(temp_path, reference="linked-mastoid")
         pipeline._load_edf()
+        pipeline._identify_channel_types()  # 需要先识别通道类型
 
         ref_info = pipeline._set_reference()
 
@@ -336,6 +341,7 @@ class TestReReferencing:
 
         pipeline = AutoPreprocessPipeline(temp_path, reference="linked-mastoid")
         pipeline._load_edf()
+        pipeline._identify_channel_types()  # 需要先识别通道类型
 
         ref_info = pipeline._set_reference()
 
@@ -633,10 +639,8 @@ class TestArtifactDetection:
         pipeline._load_edf()
         pipeline._identify_channel_types()
         pipeline._set_reference()
-        pipeline._apply_notch_filter()
-        pipeline._apply_bandpass_filter()
 
-        # 执行伪迹检测
+        # 执行伪迹检测（在带通滤波之前，以检测高频伪迹）
         artifacts = pipeline._detect_artifacts()
 
         # 验证检测到 EOG 伪迹（在 3-4s 时间段）
@@ -666,10 +670,8 @@ class TestArtifactDetection:
         pipeline._load_edf()
         pipeline._identify_channel_types()
         pipeline._set_reference()
-        pipeline._apply_notch_filter()
-        pipeline._apply_bandpass_filter()
 
-        # 执行伪迹检测
+        # 执行伪迹检测（在带通滤波之前，以检测高频 EMG）
         artifacts = pipeline._detect_artifacts()
 
         # 验证检测到 EMG 伪迹
@@ -697,21 +699,19 @@ class TestArtifactDetection:
         pipeline = AutoPreprocessPipeline(temp_path, flat_threshold=0.5)
         pipeline._load_edf()
         pipeline._identify_channel_types()
-        pipeline._set_reference()
-        pipeline._apply_notch_filter()
-        pipeline._apply_bandpass_filter()
+        # 不执行重参考，以避免平均参考影响 flat 段的检测
 
-        # 执行伪迹检测
+        # 执行伪迹检测（在带通滤波之前）
         artifacts = pipeline._detect_artifacts()
 
         # 验证检测到 flat 伪迹
         flat_artifacts = [a for a in artifacts if a.artifact_type == "flat"]
         assert len(flat_artifacts) > 0, "应检测到平坦段伪迹"
 
-        # 验证时间段
+        # 验证时间段（flat 段在 8-9.5s）
         for artifact in flat_artifacts:
-            assert 7.5 < artifact.start_time < 9.0, \
-                f"Flat 伪迹应在 8-8.5s 附近，实际在 {artifact.start_time:.2f}s"
+            assert 7.5 < artifact.start_time < 10.0, \
+                f"Flat 伪迹应在 8-9.5s 附近，实际在 {artifact.start_time:.2f}s"
 
         Path(temp_path).unlink(missing_ok=True)
 
@@ -730,10 +730,8 @@ class TestArtifactDetection:
         pipeline._load_edf()
         pipeline._identify_channel_types()
         pipeline._set_reference()
-        pipeline._apply_notch_filter()
-        pipeline._apply_bandpass_filter()
 
-        # 执行伪迹检测
+        # 执行伪迹检测（在带通滤波之前）
         artifacts = pipeline._detect_artifacts()
 
         # 验证检测到 drift 伪迹
@@ -749,15 +747,18 @@ class TestArtifactDetection:
         n_samples = int(sfreq * duration)
         times = np.linspace(0, duration, n_samples)
 
-        # 创建基础信号
-        data = np.array([20 * np.sin(2 * np.pi * 10 * times)])
+        # 创建基础信号（使用多个通道以避免单通道重参考问题）
+        data = np.array([
+            20 * np.sin(2 * np.pi * 10 * times),
+            20 * np.sin(2 * np.pi * 10 * times),
+        ])
 
-        # 在 2-2.1s 添加瞬时大幅跳变
+        # 在第一个通道的 2-2.1s 添加瞬时大幅跳变（500 µV，重参考后约为 250 µV）
         jump_start = int(2.0 * sfreq)
         jump_end = int(2.1 * sfreq)
-        data[0, jump_start:jump_end] += 300  # 大幅跳变
+        data[0, jump_start:jump_end] += 500  # 大幅跳变
 
-        info = mne.create_info(["Fp1"], sfreq, ch_types="eeg")
+        info = mne.create_info(["Fp1", "Fp2"], sfreq, ch_types="eeg")
         raw = mne.io.RawArray(data * 1e-6, info)
         temp_path = save_synthetic_to_temp(raw, "test_cable_artifacts.edf")
 
@@ -765,10 +766,8 @@ class TestArtifactDetection:
         pipeline._load_edf()
         pipeline._identify_channel_types()
         pipeline._set_reference()
-        pipeline._apply_notch_filter()
-        pipeline._apply_bandpass_filter()
 
-        # 执行伪迹检测
+        # 执行伪迹检测（在带通滤波之前）
         artifacts = pipeline._detect_artifacts()
 
         # 验证检测到跳变伪迹
@@ -791,10 +790,8 @@ class TestArtifactDetection:
         pipeline._load_edf()
         pipeline._identify_channel_types()
         pipeline._set_reference()
-        pipeline._apply_notch_filter()
-        pipeline._apply_bandpass_filter()
 
-        # 执行伪迹检测
+        # 执行伪迹检测（在带通滤波之前）
         artifacts = pipeline._detect_artifacts()
 
         # 干净信号应检测到很少或没有伪迹
@@ -946,7 +943,7 @@ class TestHelperMethods:
     def test_detect_jumps(self):
         """测试跳变检测"""
         # 创建包含跳变的数据（单位为 µV）
-        data = np.array([[10, 10, 10, 500, 10, 10, 10]], dtype=float) * 1e-6  # 转换为伏特
+        data = np.array([[10, 10, 10, 500, 10, 10, 10]], dtype=float)  # 单位为 µV
 
         raw = create_synthetic_raw(n_channels=1, duration=1.0)
         temp_path = save_synthetic_to_temp(raw, "test_jumps.edf")

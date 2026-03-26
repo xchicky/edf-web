@@ -168,9 +168,9 @@ class AutoPreprocessPipeline:
         1. 加载 EDF 文件（preload=False）
         2. 识别通道类型（EEG/EOG/EMG/其他）
         3. 重参考（average 或 linked-mastoid）
-        4. Notch 滤波（去除工频干扰）
-        5. 带通滤波
-        6. 伪迹检测（在滤波后数据上）
+        4. 伪迹检测（在原始数据上，避免高频 EMG 被带通滤波滤除）
+        5. Notch 滤波（去除工频干扰）
+        6. 带通滤波
         7. 记录伪迹到 MNE annotations
         8. 返回结果
 
@@ -192,21 +192,7 @@ class AutoPreprocessPipeline:
         ref_info = self._set_reference()
         self.preprocess_log["reference"] = ref_info
 
-        # 4. Notch 滤波
-        if self.notch_freq is not None:
-            logger.info(f"执行 Notch 滤波: {self.notch_freq} Hz")
-            notch_info = self._apply_notch_filter()
-            self.preprocess_log["notch_filter"] = notch_info
-        else:
-            logger.info("跳过 Notch 滤波")
-            self.preprocess_log["notch_filter"] = None
-
-        # 5. 带通滤波
-        logger.info(f"执行带通滤波: {self.bandpass_low}-{self.bandpass_high} Hz")
-        bandpass_info = self._apply_bandpass_filter()
-        self.preprocess_log["bandpass_filter"] = bandpass_info
-
-        # 6. 伪迹检测
+        # 4. 伪迹检测（在带通滤波之前，以检测高频 EMG）
         logger.info("检测伪迹")
         artifacts = self._detect_artifacts()
         self.preprocess_log["artifact_detection"] = {
@@ -216,6 +202,20 @@ class AutoPreprocessPipeline:
                 for atype in set(a.artifact_type for a in artifacts)
             }
         }
+
+        # 5. Notch 滤波
+        if self.notch_freq is not None:
+            logger.info(f"执行 Notch 滤波: {self.notch_freq} Hz")
+            notch_info = self._apply_notch_filter()
+            self.preprocess_log["notch_filter"] = notch_info
+        else:
+            logger.info("跳过 Notch 滤波")
+            self.preprocess_log["notch_filter"] = None
+
+        # 6. 带通滤波
+        logger.info(f"执行带通滤波: {self.bandpass_low}-{self.bandpass_high} Hz")
+        bandpass_info = self._apply_bandpass_filter()
+        self.preprocess_log["bandpass_filter"] = bandpass_info
 
         # 7. 标记伪迹
         logger.info(f"标记 {len(artifacts)} 个伪迹")
@@ -241,6 +241,8 @@ class AutoPreprocessPipeline:
         - 乳突通道（M1, M2, A1, A2）→ EEG
         - 其他 → misc
         - 如果无法识别，默认所有通道为 EEG
+
+        同时设置 self.channel_types 以便其他方法使用。
 
         Returns:
             Dict[str, str]: 通道名称到类型的映射
@@ -274,6 +276,9 @@ class AutoPreprocessPipeline:
             else:
                 channel_types[ch_name] = "eeg"
                 logger.debug(f"通道 {ch_name} 无法识别，默认为 EEG")
+
+        # 自动设置 self.channel_types 以便其他方法使用
+        self.channel_types = channel_types
 
         logger.info(f"识别通道类型: EEG={sum(1 for t in channel_types.values() if t=='eeg')}, "
                     f"EOG={sum(1 for t in channel_types.values() if t=='eog')}, "
@@ -808,6 +813,8 @@ class AutoPreprocessPipeline:
     ) -> List[ArtifactEvent]:
         """合并相邻的伪迹窗口
 
+        只合并相同类型和通道的伪迹，避免不同类型的伪迹被错误合并。
+
         Args:
             artifacts: 伪迹列表
             gap: 合并间隔（秒），小于此间隔的窗口会被合并
@@ -818,30 +825,40 @@ class AutoPreprocessPipeline:
         if not artifacts:
             return []
 
-        # 按开始时间排序
-        sorted_artifacts = sorted(artifacts, key=lambda a: a.start_time)
+        # 按类型和通道分组
+        groups = {}
+        for artifact in artifacts:
+            key = (artifact.artifact_type, artifact.channel)
+            if key not in groups:
+                groups[key] = []
+            groups[key].append(artifact)
 
+        # 对每个组分别进行合并
         merged = []
-        current = sorted_artifacts[0]
+        for key, group_artifacts in groups.items():
+            # 按开始时间排序
+            sorted_artifacts = sorted(group_artifacts, key=lambda a: a.start_time)
 
-        for artifact in sorted_artifacts[1:]:
-            # 检查是否与当前窗口重叠或间隔很小
-            if artifact.start_time - current.end_time <= gap:
-                # 合并
-                current = ArtifactEvent(
-                    start_time=current.start_time,
-                    end_time=max(current.end_time, artifact.end_time),
-                    artifact_type=current.artifact_type,
-                    channel=current.channel,
-                    severity=max(current.severity, artifact.severity),
-                    description=f"{current.description} + {artifact.description}",
-                )
-            else:
-                # 不合并，保存当前窗口
-                merged.append(current)
-                current = artifact
+            current = sorted_artifacts[0]
 
-        # 保存最后一个窗口
-        merged.append(current)
+            for artifact in sorted_artifacts[1:]:
+                # 检查是否与当前窗口重叠或间隔很小
+                if artifact.start_time - current.end_time <= gap:
+                    # 合并
+                    current = ArtifactEvent(
+                        start_time=current.start_time,
+                        end_time=max(current.end_time, artifact.end_time),
+                        artifact_type=current.artifact_type,
+                        channel=current.channel,
+                        severity=max(current.severity, artifact.severity),
+                        description=f"{current.description} + {artifact.description}",
+                    )
+                else:
+                    # 不合并，保存当前窗口
+                    merged.append(current)
+                    current = artifact
+
+            # 保存最后一个窗口
+            merged.append(current)
 
         return merged
