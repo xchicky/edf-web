@@ -54,7 +54,7 @@ export function checkModeCompatibility(
     warnings.push('无效的采样率');
   }
 
-  const hasErrors = issues.filter((i) => i.severity === 'error').length > 0;
+  const hasErrors = issues.filter((issue) => issue.severity === 'error').length > 0;
   const isCompatible = !hasErrors;
   const canApplyWithFixes = !hasErrors;
 

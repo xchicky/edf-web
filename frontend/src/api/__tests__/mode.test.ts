@@ -15,9 +15,8 @@ import {
   recordModeUsage,
   getModeStats,
   getModeCategories,
-  type Mode,
-  type ModeCreateRequest,
 } from '../mode';
+import type { Mode } from '../../types/mode';
 
 // Mock axios
 vi.mock('axios');

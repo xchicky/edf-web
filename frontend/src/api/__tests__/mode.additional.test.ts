@@ -14,8 +14,8 @@ import {
   importMode,
   getRecommendedModes,
   resetMode,
-  type Mode,
 } from '../mode';
+import type { Mode } from '../../types/mode';
 
 // Mock axios
 vi.mock('axios');

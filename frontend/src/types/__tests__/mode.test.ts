@@ -15,9 +15,6 @@ import {
   type ModeConfig,
   type DisplayChannel,
   type BandConfig,
-  type CompatibilityCheckResult,
-  type ModeRecommendation,
-  type ModeUsageStats,
   type ModeSignalConfig,
 } from '../mode';
 

@@ -40,7 +40,7 @@ const localStorageMock = (() => {
   };
 })();
 
-Object.defineProperty(global, 'localStorage', {
+Object.defineProperty(globalThis, 'localStorage', {
   value: localStorageMock,
 });
 
@@ -53,6 +53,7 @@ describe('signalStorage', () => {
     enabled: true,
     createdAt: 1000000,
     modifiedAt: 1000000,
+    operands: [],
   };
 
   const mockSignal2: Signal = {
@@ -63,6 +64,7 @@ describe('signalStorage', () => {
     enabled: false,
     createdAt: 2000000,
     modifiedAt: 2000000,
+    operands: [],
   };
 
   const mockSignals: Signal[] = [mockSignal1, mockSignal2];

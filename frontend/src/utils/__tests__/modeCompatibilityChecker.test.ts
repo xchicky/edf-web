@@ -9,7 +9,6 @@ import {
   getMissingChannels,
   checkSamplingRate,
   filterCompatibleModes,
-  type CompatibilityIssue,
 } from '../modeCompatibilityChecker';
 import { BUILT_IN_MODES } from '../../types/mode';
 

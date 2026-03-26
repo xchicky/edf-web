@@ -13,7 +13,6 @@ import {
   type RecommendationContext,
 } from '../modeRecommender';
 import { BUILT_IN_MODES } from '../../types/mode';
-import type { Mode } from '../../types/mode';
 
 describe('modeRecommender', () => {
   const mockChannelNames = ['Fp1', 'Fp2', 'F3', 'F4', 'C3', 'C4', 'O1', 'O2'];

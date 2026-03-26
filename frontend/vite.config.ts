@@ -12,7 +12,7 @@ export default defineConfig({
       configureServer(server) {
         // Dev-only middleware: serve demo.edf for easier development testing
         // TODO: Remove this plugin before production deployment
-        server.middlewares.use('/edf/demo.edf', (req, res) => {
+        server.middlewares.use('/edf/demo.edf', (_req, res) => {
           // Resolve to the demo.edf file in the parent project's edf directory
           const demoPath = path.resolve(__dirname, '../../edf-web/edf/demo.edf')
           if (fs.existsSync(demoPath)) {
