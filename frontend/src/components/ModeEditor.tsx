@@ -4,7 +4,6 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useEDFStore } from '../store/edfStore';
 import { SignalExpressionBuilder } from './SignalExpressionBuilder';
 import type { Mode, ModeCategory, ModeSignalConfig, ModeConfig, Operand } from '../types/mode';
 import { MODE_CATEGORIES, DEFAULT_BANDS } from '../types/mode';
