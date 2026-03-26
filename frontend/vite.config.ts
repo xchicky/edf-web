@@ -30,7 +30,7 @@ export default defineConfig({
   ],
   server: {
     host: '0.0.0.0',
-    allowedHosts: ["all"],
+    allowedHosts: true,
     fs: {
       // Allow serving files from parent directories
       strict: false,
