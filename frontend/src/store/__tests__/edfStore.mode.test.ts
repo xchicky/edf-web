@@ -489,7 +489,7 @@ describe('useEDFStore - Mode Management', () => {
       await useEDFStore.getState().applyMode('mode-with-signals');
 
       // 验证信号被保存到 localStorage
-      const storedSignals = localStorageMock.getItem(`signals_${mockMetadata.file_id}`);
+      const storedSignals = localStorageMock.getItem(`edf-signals-${mockMetadata.file_id}`);
       expect(storedSignals).not.toBeNull();
       const parsedSignals = JSON.parse(storedSignals!);
       expect(parsedSignals).toHaveLength(1);
