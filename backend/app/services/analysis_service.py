@@ -227,7 +227,7 @@ class AnalysisService:
                 band_psds = psd_mean[freq_mask]
 
                 # 绝对功率（积分）
-                absolute_power = float(np.trapezoid(band_psds, freqs[freq_mask]))
+                absolute_power = float(np.trapz(band_psds, freqs[freq_mask]))
                 total_power += absolute_power
 
                 band_results[band_name] = {
