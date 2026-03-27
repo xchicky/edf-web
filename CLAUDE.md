@@ -80,7 +80,7 @@ EDF 文件存储 (backend/storage/)
   - **信号数据** (signalData) - 计算结果缓存
   - **加载状态** (isLoadingSignals) - 信号计算进度
 
-**核心组件** (23个组件):
+**核心组件** (25个组件):
 - `App.tsx` - 主应用容器 (21KB，核心逻辑)
 - `WaveformCanvas.tsx` - 波形画布 (Canvas 渲染，核心可视化组件)
 - `OverviewStrip.tsx` - 概览条 (显示完整时间范围)
@@ -104,6 +104,8 @@ EDF 文件存储 (backend/storage/)
 - **`ModeSelector.tsx`** - 模式选择器 (智能推荐和兼容性检查)
 - **`ModeCard.tsx`** - 模式卡片 (显示模式信息)
 - **`CompatibilityWarning.tsx`** - 兼容性警告 (显示模式兼容性问题)
+- **`PreprocessSelector.tsx`** - 预处理方法选择器 (去漂移/滤波)
+- **`AdvancedAnalysisModal.tsx`** - 高级分析模态框 (原始与预处理信号对比)
 
 **API 客户端**:
 - `frontend/src/api/edf.ts` - 封装 EDF 相关 API 调用 (文件上传、元数据、波形、信号管理、分析)
@@ -136,7 +138,8 @@ MNE-Python Library (EDF 解析)
 - **`signal_calculator.py`** - 信号计算引擎 (表达式求值、数据处理)
 - **`analysis_service.py`** - 分析服务 (时域/频域/综合分析)
 - **`mode_service.py`** - 模式管理服务 (模式存储、兼容性检查、推荐系统)
-- **`expression_validator.py`** - 表达式验证 (语法检查、安全性验证)
+- **`preprocessing.py`** - 信号预处理 (去漂移、高通滤波、基线校正)
+- **`auto_preprocess.py`** - 自动预处理流水线 (重参考、Notch滤波、伪迹检测)
 
 **API 端点**:
 ```
@@ -221,76 +224,60 @@ np.abs(Fp1 - F3)      # 绝对值
 **前端流程**: SignalEditor → ExpressionValidator → Zustand Store → localStorage → API 调用 → signalData Map
 **后端流程**: 接收请求 → SignalCalculator → EDF 加载 (preload=False) → 表达式求值 → 返回结果
 
-### 2. 模式管理系统 (新增)
+### 2. 信号预处理系统 (新增)
 
-模式是一组预配置的 EEG 分析设置，包括通道选择、视图参数、派生信号配置等。
+提供信号预处理功能，支持去漂移、滤波等操作。
 
-**模式分类**:
-- `clinical` - 临床诊断模式 (标准 EEG 分析视图)
-- `research` - 科学研究模式 (频域分析、高级统计)
-- `education` - 教学演示模式 (简化视图、基础功能)
-- `custom` - 自定义模式 (用户创建的个性化配置)
+**预处理方法** (`backend/app/services/preprocessing.py`):
+- `none` - 无预处理，保持原始信号
+- `linear_detrend` - 线性去漂移，去除线性趋势
+- `polynomial_detrend` - 多项式去漂移，去除复杂趋势
+- `highpass_filter` - 高通滤波 (Butterworth, 默认 0.5Hz)
+- `bandpass_filter` - 带通滤波 (0.5-50Hz)
+- `baseline_correction` - 基线校正 (Savitzky-Golay)
 
-**核心功能**:
-- **CRUD 操作**: 创建、读取、更新、删除自定义模式
-- **兼容性检查**: 自动检查模式与当前 EDF 文件的兼容性 (通道、采样率)
-- **智能推荐**: 基于文件特征和使用历史推荐最适合的模式
-- **导入导出**: 支持 JSON 格式的模式导入导出，便于分享和备份
-- **使用统计**: 记录模式使用频率和最近使用时间，优化推荐算法
-
-**内置模式**:
-1. **临床标准模式** (`mode-clinical-standard`): 8 通道标准 EEG 布局，包含差值信号 (Fp1-F3, Fp2-F4)
-2. **频谱研究模式** (`mode-research-spectral`): 专注于频域分析，要求 Fz, Cz, Pz 通道和 100Hz+ 采样率
-3. **基础教学模式** (`mode-education-basic`): 简化的 2 通道视图，适合教学演示
+**自动预处理流水线** (`backend/app/services/auto_preprocess.py`):
+完整的 EEG 预处理流程，包括：
+- 通道类型识别 (EEG/EOG/EMG)
+- 重参考 (平均参考/乳突参考)
+- Notch 滤波 (去除 50Hz 工频干扰)
+- 带通滤波 (默认 0.5-50Hz)
+- 伪迹检测 (EOG/EMG/Flat/Drift/Jump)
+- 伪迹标记 (MNE Annotations)
 
 **前端组件**:
-- `ModeSelector` - 模式选择器，显示兼容性标记
-- `ModeEditor` - 模式编辑器，集成 SignalExpressionBuilder
-- `ModeCard` - 模式卡片，展示模式信息
-- `CompatibilityWarning` - 兼容性警告提示
+- `PreprocessSelector.tsx` - 预处理方法选择器
+- `AdvancedAnalysisModal.tsx` - 高级分析模态框 (对比原始与预处理后信号)
 
-**工具函数**:
-- `modeCompatibilityChecker.ts` - 兼容性检查逻辑
-- `modeRecommender.ts` - 智能推荐算法
-
-**后端存储**:
-- 自定义模式存储在 `backend/storage/modes/custom_modes.json`
-- 使用统计存储在 `backend/storage/modes/usage_stats.json`
-
-### 6. 数据分析系统 (新增)
-
-派生信号通过对原始 EEG 通道进行数学运算得到新信号。
-
-**表达式语法**: `+`, `-`, `*`, `/`, `()`, NumPy 函数 (`np.abs`, `np.mean`, `np.std` 等)
-```
-Fp1 - F3              # 差值
-(Fp1 + F3) / 2        # 平均值
-np.abs(Fp1 - F3)      # 绝对值
-```
-
-**前端流程**: SignalEditor → ExpressionValidator → Zustand Store → localStorage → API 调用 → signalData Map
-**后端流程**: 接收请求 → SignalCalculator → EDF 加载 (preload=False) → 表达式求值 → 返回结果
-
-### 6. 数据分析系统 (新增)
+### 3. 数据分析系统
 
 **时域分析** (`SelectionInfo.tsx`, `StatsView.tsx`):
 - 基本统计: 最小值、最大值、平均值、范围
 - 高级统计: 标准差、均方根 (RMS)、峰度、偏度
-- 计算位置: 前端 (`statsCalculator.ts`) + 后端 (`analysis_service.py`)
 
 **频域分析** (`FrequencyView.tsx`):
 - 频带功率: Delta (0.5-4Hz), Theta (4-8Hz), Alpha (8-13Hz), Beta (13-30Hz), Gamma (30-100Hz)
-- 绝对功率: µV² 单位
-- 相对功率: 百分比表示
+- 绝对功率 (µV²) 和相对功率 (%)
 - 功率谱密度 (PSD): 频率-功率分布曲线
 
-**分析类型**:
-1. **时域分析** - 时间域统计特征
-2. **频带功率分析** - EEG 频带能量分布
-3. **功率谱密度分析** - 完整频率谱
-4. **综合分析** - 同时返回时域和频域结果
+### 4. 模式管理系统
 
-### 2. 内存优化 (关键)
+模式是一组预配置的 EEG 分析设置，包括通道选择、视图参数、派生信号配置等。
+
+**模式分类**: `clinical` (临床), `research` (科研), `education` (教学), `custom` (自定义)
+
+**核心功能**: CRUD 操作、兼容性检查、智能推荐、导入导出、使用统计
+
+**内置模式**:
+1. 临床标准模式 - 8 通道标准 EEG 布局
+2. 频谱研究模式 - 专注于频域分析
+3. 基础教学模式 - 简化的 2 通道视图
+
+**后端存储**:
+- 自定义模式: `backend/storage/modes/custom_modes.json`
+- 使用统计: `backend/storage/modes/usage_stats.json`
+
+### 5. 内存优化 (关键)
 
 176MB EDF 文件完整加载需要 ~240MB RAM。优化方案：
 ```python
@@ -303,16 +290,16 @@ raw.load_data()                           # 现在才加载
 
 **内存对比**: 完整 ~240MB → 10秒数据 ~12MB (↓95%) → 10通道×10秒 ~2MB (↓99%)
 
-### 3. 中文文件名支持
+### 6. 中文文件名支持
 
 必须使用 `encoding='latin1'` 参数读取 EDF 文件。前端 UTF-8 无需特殊处理。
 
-### 4. Canvas 渲染
+### 7. Canvas 渲染
 
 `WaveformCanvas.tsx` 使用原生 Canvas API。注意坐标系统对齐 (X 轴宽度必须与 TimeAxis 一致)。
 已修复: 0.5 电压缩放因子 (a16c40c)、X 轴对齐 (52070a1)、网格线可见性 (42d4813)
 
-### 5. 测试覆盖率
+### 8. 测试覆盖率
 
 **前端 (Vitest)**:
 - 测试文件: 13 个
@@ -425,7 +412,7 @@ edf-web/
 │   │   │   ├── analysis.ts     # 分析类型定义
 │   │   │   ├── mode.ts         # 模式类型定义
 │   │   │   └── __tests__/      # 类型测试
-│   │   └── components/         # React 组件 (23 个)
+│   │   └── components/         # React 组件 (25 个)
 │   │       ├── WaveformCanvas.tsx
 │   │       ├── SignalEditor.tsx
 │   │       ├── SignalList.tsx
@@ -437,6 +424,8 @@ edf-web/
 │   │       ├── SelectionInfo.tsx       # 选区统计
 │   │       ├── StatsView.tsx           # 时域分析
 │   │       ├── FrequencyView.tsx       # 频带分析
+│   │       ├── PreprocessSelector.tsx  # 预处理选择器
+│   │       ├── AdvancedAnalysisModal.tsx  # 高级分析模态框
 │   │       ├── OverviewStrip.tsx
 │   │       ├── ChannelSelector.tsx
 │   │       ├── TimeAxis.tsx
@@ -471,6 +460,8 @@ edf-web/
 │   │   │   ├── signal_calculator.py  # 信号计算
 │   │   │   ├── analysis_service.py   # 分析服务
 │   │   │   ├── mode_service.py # 模式管理服务
+│   │   │   ├── preprocessing.py  # 信号预处理
+│   │   │   ├── auto_preprocess.py # 自动预处理流水线
 │   │   │   └── file_manager.py # 文件管理
 │   │   └── utils/
 │   │       └── expression_validator.py  # 表达式验证
@@ -581,280 +572,6 @@ A: 系统检查模式定义的必需通道 (requiredChannels) 是否在当前 ED
 **Q: 表达式求值安全吗？**
 A: 后端使用严格的白名单机制，只允许特定的 NumPy 函数，禁止文件 I/O 和系统命令，限制表达式长度 ≤ 500 字符，确保求值安全。
 
-## 模式管理功能实现总结 (2026-02-03)
-
-### 完成的功能
-
-实现了完整的 EEG 分析模式管理系统，支持用户创建、管理和应用预配置的分析方案。
-
-#### 后端实现 (8 个文件)
-
-1. **`backend/app/models/mode.py`** (201 行)
-   - Pydantic 数据模型定义
-   - 完整的类型验证和字段约束
-   - 支持嵌套配置结构
-
-2. **`backend/app/services/mode_service.py`** (621 行)
-   - 模式管理业务逻辑
-   - 兼容性检查算法
-   - 智能推荐系统
-   - 使用统计追踪
-   - JSON 文件持久化存储
-
-3. **`backend/app/api/routes/modes.py`** (535 行)
-   - 完整的 CRUD API 端点
-   - 兼容性检查端点
-   - 推荐算法端点
-   - 导入导出功能
-   - 使用统计端点
-
-4. **`backend/tests/test_modes_api.py`** (730 行)
-   - 73 个测试用例
-   - 完整的 CRUD 操作测试
-   - 兼容性检查测试
-   - 批量操作测试
-   - 边界条件测试
-
-#### 前端实现 (14 个文件)
-
-5. **`frontend/src/types/mode.ts`** (497 行)
-   - 完整的 TypeScript 类型定义
-   - 3 个内置模式预设
-   - 常量和配置
-
-6. **`frontend/src/api/mode.ts`** (267 行)
-   - 完整的 API 客户端
-   - 所有模式管理端点封装
-   - 类型安全的请求/响应
-
-7. **`frontend/src/utils/modeCompatibilityChecker.ts`** (192 行)
-   - 前端兼容性检查算法
-   - 通道缺失检测
-   - 采样率验证
-   - 兼容性报告生成
-
-8. **`frontend/src/utils/modeRecommender.ts`** (448 行)
-   - 智能推荐算法
-   - 上下文感知推荐
-   - 使用历史分析
-   - 分类匹配算法
-
-9. **`frontend/src/components/ModeEditor.tsx`** (608 行)
-   - 模式编辑器组件
-   - 集成 SignalExpressionBuilder
-   - 完整的表单验证
-   - 通道选择配置
-
-10. **`frontend/src/components/ModeSelector.tsx`** (206 行)
-    - 模式选择器组件
-    - 兼容性标记显示
-    - 智能过滤和排序
-
-11. **`frontend/src/components/ModeCard.tsx`** (新增)
-    - 模式卡片展示组件
-
-12. **`frontend/src/components/CompatibilityWarning.tsx`** (新增)
-    - 兼容性警告提示组件
-
-13. **`frontend/src/store/edfStore.ts`** (700+ 行)
-    - 集成模式管理状态
-    - 模式应用逻辑
-    - 兼容性检查集成
-    - 使用统计记录
-
-14. **前端测试文件** (8 个)
-    - `frontend/src/api/__tests__/mode.test.ts`
-    - `frontend/src/api/__tests__/mode.additional.test.ts`
-    - `frontend/src/utils/__tests__/modeCompatibilityChecker.test.ts`
-    - `frontend/src/utils/__tests__/modeCompatibilityChecker.additional.test.ts`
-    - `frontend/src/utils/__tests__/modeRecommender.test.ts`
-    - `frontend/src/components/__tests__/ModeSelector.test.tsx`
-    - `frontend/src/components/__tests__/ModeEditor.signalBuilder.test.tsx`
-    - `frontend/src/components/__tests__/CompatibilityWarning.test.tsx`
-
-#### 技术亮点
-
-1. **前后端类型一致**: TypeScript 类型定义与 Pydantic 模型完全对应
-2. **智能推荐算法**: 基于文件特征、使用历史和上下文的综合推荐
-3. **兼容性检查**: 前后端双重验证，确保模式可安全应用
-4. **安全求值**: 表达式验证机制增强，防止代码注入
-5. **测试覆盖**: 73+ 后端测试，50+ 前端测试，覆盖所有核心功能
-
-#### API 端点总览
-
-| 端点 | 方法 | 功能 | 测试 |
-|------|------|------|------|
-| `/api/modes/` | GET | 获取所有模式 | ✓ |
-| `/api/modes/categories` | GET | 获取分类 | ✓ |
-| `/api/modes/{id}` | GET | 获取单个模式 | ✓ |
-| `/api/modes/` | POST | 创建模式 | ✓ |
-| `/api/modes/{id}` | PUT | 更新模式 | ✓ |
-| `/api/modes/{id}` | DELETE | 删除模式 | ✓ |
-| `/api/modes/check-compatibility` | POST | 兼容性检查 | ✓ |
-| `/api/modes/batch-check-compatibility` | POST | 批量兼容性检查 | ✓ |
-| `/api/modes/recommend` | POST | 推荐模式 | ✓ |
-| `/api/modes/{id}/use` | POST | 记录使用 | ✓ |
-| `/api/modes/{id}/stats` | GET | 使用统计 | ✓ |
-| `/api/modes/{id}/favorite` | POST | 切换收藏 | ✓ |
-| `/api/modes/{id}/duplicate` | POST | 复制模式 | ✓ |
-| `/api/modes/{id}/export` | GET | 导出模式 | ✓ |
-| `/api/modes/import` | POST | 导入模式 | ✓ |
-| `/api/modes/{id}/apply` | POST | 应用模式 | ✓ |
-| `/api/modes/{id}/reset` | POST | 重置模式 | ✓ |
-
-#### 内置模式
-
-1. **临床标准模式** (`mode-clinical-standard`)
-   - 8 通道标准布局 (Fp1, Fp2, F3, F4, C3, C4, O1, O2)
-   - 包含差值派生信号 (Fp1-F3, Fp2-F4)
-   - 时域分析配置
-   - 适合临床诊断
-
-2. **频谱研究模式** (`mode-research-spectral`)
-   - 3 通道频域布局 (Fz, Cz, Pz)
-   - 要求 100Hz+ 采样率
-   - 频带分析 (Delta, Theta, Alpha, Beta, Gamma)
-   - 适合科研分析
-
-3. **基础教学模式** (`mode-education-basic`)
-   - 简化的 2 通道视图 (Fp1, Fp2)
-   - 基础频带配置
-   - 适合教学演示
-
-## 测试补全工作总结 (2026-02-01)
-
-### 完成的工作
-
-使用 TDD 方法论完成了前后端测试的全面补全，显著提升了代码质量和可维护性。
-
-#### 新增测试文件 (3 个)
-
-1. **`frontend/src/utils/__tests__/signalStorage.test.ts`** (24 tests)
-   - localStorage 操作完整测试
-   - 覆盖正常情况、错误处理、边界条件
-   - 测试内容: 保存/加载/删除信号、存储大小计算、错误恢复
-
-2. **`frontend/src/api/__tests__/edf.test.ts`** (22 tests)
-   - API 调用层完整测试
-   - Mock axios 测试所有 API 端点
-   - 测试内容: 文件上传、元数据获取、波形数据、信号验证/计算、分析 API
-
-3. **`frontend/src/components/__tests__/SignalExpressionBuilder.test.tsx`** (26 tests)
-   - 表达式构建器组件完整测试
-   - UI 交互和状态管理测试
-   - 测试内容: 渲染、表达式输入、验证状态、构建器显示/隐藏、快捷按钮
-
-#### 扩展测试文件 (2 个)
-
-1. **`frontend/src/store/__tests__/edfStore.test.ts`** (28 → 51 tests, +23 tests)
-   - 添加分析功能测试 (时域分析、频带功率、PSD、综合分析)
-   - 选择管理测试 (选区创建、清除、状态查询)
-   - 书签管理测试 (添加/删除/跳转书签)
-
-2. **`frontend/src/components/__tests__/SignalEditor.test.tsx`** (9 → 22 tests, +13 tests)
-   - 表单验证测试 (名称、表达式、颜色)
-   - 用户交互测试 (保存、取消、删除)
-   - 边界情况测试 (空输入、重复名称、无效表达式)
-
-### 覆盖率提升
-
-| 指标 | 之前 | 之后 | 提升 |
-|------|------|------|------|
-| 语句覆盖率 | 70.73% | 84.77% | +14.04% |
-| 分支覆盖率 | 59.21% | 75.69% | +16.48% |
-| 函数覆盖率 | 59.61% | 85.25% | +25.64% |
-| 行覆盖率 | 71.46% | 85.87% | +14.41% |
-| 测试数量 | 193 | 301 | +108 |
-
-### 测试方法论
-
-**采用的 TDD 实践**:
-1. **红-绿-重构循环**
-   - 先编写失败的测试用例 (Red)
-   - 实现最小代码使测试通过 (Green)
-   - 重构优化代码结构 (Refactor)
-
-2. **测试金字塔**
-   - 单元测试: 工具函数、组件、状态管理
-   - 集成测试: API 调用、数据流
-   - E2E 测试: 待补充 (建议使用 Playwright)
-
-3. **测试命名规范**
-   - 使用 `describe` 分组相关测试
-   - 使用 `it` 清晰描述测试场景
-   - 中文描述增强可读性
-
-4. **Mock 策略**
-   - API 层: Mock axios 拦截 HTTP 请求
-   - localStorage: 使用内存模拟实现
-   - 组件: Mock 子组件和外部依赖
-
-### 测试文件示例
-
-**signalStorage.test.ts** (24 tests):
-```typescript
-describe('signalStorage', () => {
-  describe('saveSignals', () => {
-    it('应该成功保存信号到 localStorage')
-    it('应该覆盖已存在的信号数据')
-    it('应该保存空数组')
-    it('当 localStorage 不可用时应抛出错误')
-  })
-  describe('loadSignals', () => {
-    it('应该成功加载已保存的信号')
-    it('当没有保存的数据时应返回空数组')
-    it('当数据损坏时应返回空数组')
-  })
-  // ... 更多测试
-})
-```
-
-**edf.test.ts** (22 tests):
-```typescript
-describe('EDF API', () => {
-  describe('uploadEDF', () => {
-    it('应该成功上传 EDF 文件')
-    it('应该处理上传失败')
-  })
-  describe('getMetadata', () => {
-    it('应该成功获取元数据')
-    it('应该处理获取元数据失败')
-  })
-  describe('analyzeTimeDomain', () => {
-    it('应该成功分析时域数据')
-    it('应该传递正确的参数')
-  })
-  // ... 更多测试
-})
-```
-
-### 测试运行命令
-
-```bash
-# 运行所有测试
-npm run test
-
-# 运行特定测试文件
-npm run test -- signalStorage.test.ts
-
-# 生成覆盖率报告
-npm run test:coverage
-
-# 监视模式 (开发时使用)
-npm run test -- --watch
-```
-
-### 测试质量检查
-
-**每个测试文件都确保**:
-- [ ] 正常情况测试
-- [ ] 错误处理测试
-- [ ] 边界条件测试
-- [ ] Mock 正确配置
-- [ ] 断言清晰明确
-- [ ] 测试独立运行
-- [ ] 命名描述准确
-
 ## 安全特性
 
 ### 表达式求值安全
@@ -862,49 +579,13 @@ npm run test -- --watch
 后端实现严格的表达式验证和安全求值机制 (`backend/app/utils/expression_validator.py`):
 
 1. **白名单机制**: 只允许特定的 NumPy 函数 (`np.abs`, `np.mean`, `np.std`, `np.min`, `np.max`, `np.sum`, `np.sqrt`, `np.log`, `np.exp`)
-
-2. **表达式长度限制**: 最大 500 字符，防止复杂攻击
-
-3. **语法验证**: 检查括号平衡、操作符序列、表达式完整性
-
-4. **未知标识符检测**: 识别并拒绝未知的标识符或字符
-
-5. **文件 I/O 禁止**: 表达式中不允许任何文件操作
-
-6. **系统命令禁止**: 表达式中不允许执行系统命令
-
-### 模式数据验证
-
-使用 Pydantic 模型进行严格的输入验证 (`backend/app/models/mode.py`):
-
-1. **类型验证**: 所有输入字段都有明确的类型定义
-
-2. **范围验证**: 数值字段有范围限制 (如 timeWindow > 0)
-
-3. **枚举验证**: 枚举类型字段只接受预定义的值
-
-4. **嵌套验证**: 支持复杂的嵌套结构验证
+2. **表达式长度限制**: 最大 500 字符
+3. **语法验证**: 检查括号平衡、操作符序列
+4. **文件 I/O 禁止**: 表达式中不允许任何文件操作
+5. **系统命令禁止**: 表达式中不允许执行系统命令
 
 ### API 安全
 
-1. **内置模式保护**: 内置模式不能通过 API 修改或删除 (HTTP 403)
-
-2. **错误消息安全**: 错误消息不泄露敏感的系统信息
-
-3. **输入清理**: 所有用户输入都经过验证和清理
-
-### 前端安全
-
-1. **XSS 防护**: React 自动转义 JSX 中的用户输入
-
-2. **表达式验证**: 前端和后端双重验证，确保表达式安全
-
-3. **localStorage 安全**: 信号数据和用户设置存储在浏览器本地，不涉及服务器敏感信息
-
-### 未来改进方向
-
-1. **E2E 测试**: 使用 Playwright 添加端到端测试
-2. **性能测试**: 添加大数据量下的性能基准测试
-3. **视觉回归测试**: 使用 Percy 或类似工具
-4. **API 集成测试**: 添加真实后端的集成测试
-5. **CI/CD 集成**: 在 GitHub Actions 中自动运行测试
+- **内置模式保护**: 内置模式不能通过 API 修改或删除 (HTTP 403)
+- **错误消息安全**: 错误消息不泄露敏感的系统信息
+- **输入清理**: 所有用户输入都经过 Pydantic 验证

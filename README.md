@@ -13,6 +13,8 @@ A web application for reading and visualizing EEG data from EDF files.
 ✅ **中文文件名** - 完美支持中文文件名和元数据
 ✅ **Docker 支持** - 一键启动完整服务
 ✅ **派生信号** - 支持自定义信号表达式计算
+✅ **信号预处理** - 去漂移/高通滤波/带通滤波/基线校正
+✅ **自动预处理** - 重参考/Notch滤波/伪迹检测/标记
 ✅ **选区分析** - 时域统计分析 (均值/标准差/RMS/峰度/偏度)
 ✅ **频带分析** - EEG 频带功率分析 (Delta/Theta/Alpha/Beta/Gamma)
 ✅ **模式管理** - 预配置分析方案 (临床/科研/教学/自定义)
@@ -262,28 +264,41 @@ MNE-Python 会自动检测格式类型
 edf-web/
 ├── backend/             # FastAPI 后端服务
 │   ├── app/
-│   │   ├── api/        # API 路由
+│   │   ├── api/routes/  # API 路由
 │   │   │   ├── upload.py
 │   │   │   ├── metadata.py
-│   │   │   └── waveform.py
-│   │   ├── services/   # 业务逻辑
+│   │   │   ├── waveform.py
+│   │   │   ├── signals.py
+│   │   │   ├── analysis.py
+│   │   │   └── modes.py
+│   │   ├── services/    # 业务逻辑
 │   │   │   ├── edf_parser.py
+│   │   │   ├── signal_calculator.py
+│   │   │   ├── analysis_service.py
+│   │   │   ├── mode_service.py
+│   │   │   ├── preprocessing.py
+│   │   │   ├── auto_preprocess.py
 │   │   │   └── file_manager.py
-│   │   └── main.py    # FastAPI 应用入口
-│   ├── storage/        # EDF 文件存储
+│   │   ├── models/      # Pydantic 模型
+│   │   └── main.py      # FastAPI 应用入口
+│   ├── storage/         # EDF 文件和模式存储
+│   ├── tests/           # 后端测试
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/            # React 前端应用
 │   ├── src/
-│   │   ├── api/       # API 客户端
-│   │   ├── store/     # Zustand 状态管理
-│   │   ├── App.tsx    # 主应用组件
-│   │   └── App.css    # 样式文件
+│   │   ├── api/         # API 客户端
+│   │   ├── store/       # Zustand 状态管理
+│   │   ├── components/  # React 组件 (25个)
+│   │   ├── utils/       # 工具函数
+│   │   ├── types/       # TypeScript 类型定义
+│   │   └── App.tsx      # 主应用组件
 │   ├── package.json
 │   └── Dockerfile
-├── docker-compose.yml  # Docker 编排配置
-├── edf_demo.py         # Python 命令行版本
-└── README.md           # 本文档
+├── docker-compose.yml   # Docker 编排配置
+├── edf_demo.py          # Python 命令行版本
+├── CLAUDE.md            # Claude Code 项目指南
+└── README.md            # 本文档
 ```
 
 ## API 端点 (API Endpoints)
@@ -471,7 +486,7 @@ MIT License
 
 ## 作者 (Author)
 
-Demo Script - 2026
+Kami - 2026
 
 ## 更新日志 (Changelog)
 
@@ -525,9 +540,11 @@ Demo Script - 2026
 
 ### 后端
 - **FastAPI 0.104.1** - 现代高性能 Web 框架
-- **MNE-Python 1.5.1** - EDF 文件解析
-- **Python 3.11** - 编程语言
+- **MNE-Python 1.11.0** - EDF 文件解析与 EEG 分析
+- **Pydantic 2.5.0** - 数据验证
+- **Python 3.12** - 编程语言
 - **Uvicorn** - ASGI 服务器
+- **Pytest** - 测试框架
 
 ### 前端
 - **React 19.2.0** - UI 框架
@@ -535,9 +552,9 @@ Demo Script - 2026
 - **Vite 7.2.4** - 构建工具
 - **Zustand 5.0.10** - 状态管理
 - **Axios 1.13.2** - HTTP 客户端
-- **React Dropzone 14.3.8** - 文件上传
-- **Vitest** - 单元测试框架
-- **Testing Library** - React 组件测试
+- **Tailwind CSS 4.1.18** - 样式框架
+- **Vitest 4.0.18** - 单元测试框架
+- **Playwright 1.58.1** - E2E 测试框架
 
 ### 容器化
 - **Docker** - 容器技术
@@ -551,14 +568,12 @@ Demo Script - 2026
 
 ```python
 # backend/requirements.txt
-mne==1.5.1              # NOT 1.6.0
-numpy==1.26.4           # NOT 2.x
-scipy==1.17.0
+mne==1.11.0             # 推荐版本
+scipy>=1.10.0           # MNE 依赖
 ```
 
-**原因**:
-- MNE 1.6.0 与 scipy 1.17.0 存在兼容性问题
-- NumPy 2.x 移除了 `numpy.in1d()` 函数，MNE 1.5.1 依赖此函数
+**历史问题** (已解决):
+- ~~MNE 1.6.0 与 scipy 1.17.0 存在兼容性问题~~ → 升级到 MNE 1.11.0
 
 ### 中文文件名
 
@@ -581,7 +596,3 @@ scipy==1.17.0
 **有问题？(Questions?)**
 
 请检查常见问题部分或查阅 MNE-Python 官方文档。
-
-## Author
-
-Kami
