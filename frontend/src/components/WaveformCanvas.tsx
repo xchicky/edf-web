@@ -1,7 +1,9 @@
 import React from 'react';
 import type { WaveformData } from '../store/edfStore';
 import { CursorOverlay } from './CursorOverlay';
+import { AnnotationLayer } from './AnnotationLayer';
 import { useEDFStore } from '../store/edfStore';
+import { useAnnotationStore } from '../store/annotationStore';
 
 interface WaveformCanvasProps {
   waveformData: WaveformData;
@@ -39,6 +41,9 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const gridCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = React.useRef<number | null>(null);
+  // 标注层需要追踪画布尺寸
+  const [canvasDimensions, setCanvasDimensions] = React.useState({ width: 0, height: 0 });
+  const getFilteredAnnotations = useAnnotationStore(state => state.getFilteredAnnotations);
   // 选择状态直接从 store 获取（通过 props 传入）
   // 本地不再维护选择状态，确保与 store 同步
   // 跟踪鼠标按下位置，用于区分单击和拖拽
@@ -272,6 +277,9 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
 
     canvas.height = height;
 
+    // 更新标注层尺寸
+    setCanvasDimensions({ width, height });
+
     // Report actual height to parent for AmplitudeAxis alignment
     onHeightChange?.(height);
 
@@ -447,14 +455,23 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
 
   return (
     <>
-      <canvas 
-      ref={canvasRef} 
+      <canvas
+      ref={canvasRef}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
       style={{ cursor: 'crosshair' }}
+    />
+    <AnnotationLayer
+      annotations={getFilteredAnnotations()}
+      width={canvasDimensions.width}
+      height={canvasDimensions.height}
+      currentTime={currentTime}
+      windowDuration={windowDuration}
+      channels={waveformData.channels}
+      amplitudeScale={amplitudeScale}
     />
     <CursorOverlay
       visible={cursorInfo.visible}

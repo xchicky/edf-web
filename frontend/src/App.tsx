@@ -4,6 +4,7 @@ import React, { useEffect, useCallback, useState } from 'react';
 import debounce from 'lodash.debounce';
 import { uploadEDF, getWaveform, calculateSignals } from './api/edf';
 import { useEDFStore } from './store/edfStore';
+import { useAnnotationStore } from './store/annotationStore';
 import { ChannelSelector } from './components/ChannelSelector';
 import { ModeSelector } from './components/ModeSelector';
 import { ModeEditor } from './components/ModeEditor';
@@ -88,6 +89,8 @@ function App() {
     getCurrentMode,
   } = useEDFStore();
 
+  const annotationGenerate = useAnnotationStore(state => state.generate);
+
   // Signal management state
   const [isSignalEditorOpen, setIsSignalEditorOpen] = useState(false);
   const [editingSignal, setEditingSignal] = useState<any>(null);
@@ -138,6 +141,9 @@ function App() {
         );
         const waveformData = await getWaveform(result.file_id, 0, windowDuration, initialChannels);
         setWaveform(waveformData);
+
+        // 触发标注生成（后台执行，不阻塞 UI）
+        annotationGenerate(result.file_id).catch(() => { /* 标注生成失败不影响主流程 */ });
       } catch (err) {
         // Silently fail - this is a dev convenience feature
         console.warn('Auto-load demo.edf failed:', err);
@@ -211,6 +217,9 @@ function App() {
         const initialChannels = Array.from({ length: Math.min(10, result.n_channels) }, (_, i) => i);
         const waveformData = await getWaveform(result.file_id, 0, windowDuration, initialChannels);
         setWaveform(waveformData);
+
+        // 触发标注生成（后台执行，不阻塞 UI）
+        annotationGenerate(result.file_id).catch(() => { /* 标注生成失败不影响主流程 */ });
       } catch (err: any) {
         // Normalize error to string (handle FastAPI 422 validation arrays)
         let errorMessage = err.message || 'Upload failed';
