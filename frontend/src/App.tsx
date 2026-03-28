@@ -4,6 +4,7 @@ import React, { useEffect, useCallback, useState } from 'react';
 import debounce from 'lodash.debounce';
 import { uploadEDF, getWaveform, calculateSignals } from './api/edf';
 import { useEDFStore } from './store/edfStore';
+import { useAnnotationStore } from './store/annotationStore';
 import { ChannelSelector } from './components/ChannelSelector';
 import { ModeSelector } from './components/ModeSelector';
 import { ModeEditor } from './components/ModeEditor';
@@ -88,6 +89,8 @@ function App() {
     getCurrentMode,
   } = useEDFStore();
 
+  const generateAnnotations = useAnnotationStore((s) => s.generateAnnotations);
+
   // Signal management state
   const [isSignalEditorOpen, setIsSignalEditorOpen] = useState(false);
   const [editingSignal, setEditingSignal] = useState<any>(null);
@@ -129,6 +132,10 @@ function App() {
 
         const result = await uploadEDF(file);
         setMetadata(result as any);
+
+        // Generate annotations in background (non-blocking)
+        generateAnnotations(result.file_id).catch(() => {});
+
         loadModes();
         loadSignalsFromStorage(result.file_id);
 
@@ -200,6 +207,9 @@ function App() {
       try {
         const result = await uploadEDF(files[0]);
         setMetadata(result as any);
+
+        // Generate annotations in background (non-blocking)
+        generateAnnotations(result.file_id).catch(() => {});
 
         // Load modes on file load
         loadModes();
