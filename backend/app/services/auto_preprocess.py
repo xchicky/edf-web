@@ -13,11 +13,15 @@ EEG 自动预处理流水线
 import mne
 import numpy as np
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Literal
+from typing import List, Dict, Any, Optional, Literal, TYPE_CHECKING
 from dataclasses import dataclass, field
 import logging
 
 logger = logging.getLogger(__name__)
+
+# 使用 TYPE_CHECKING 避免循环导入
+if TYPE_CHECKING:
+    from app.services.band_analyzer import BandAnalysisReport
 
 
 # ============================================================================
@@ -53,11 +57,13 @@ class PreprocessResult:
         artifacts: 检测到的伪迹列表
         preprocess_log: 每步处理的参数和统计
         artifact_annotations: MNE annotations 对象（伪迹标记）
+        band_analysis: 频段分析报告（可选）
     """
     raw_clean: mne.io.Raw
     artifacts: List[ArtifactEvent] = field(default_factory=list)
     preprocess_log: Dict[str, Any] = field(default_factory=dict)
     artifact_annotations: Optional[Any] = None
+    band_analysis: Optional["BandAnalysisReport"] = None
 
 
 # ============================================================================
@@ -161,7 +167,7 @@ class AutoPreprocessPipeline:
             logger.error(f"文件加载失败: {e}")
             raise
 
-    def run(self) -> PreprocessResult:
+    def run(self, run_band_analysis: bool = False, epoch_duration: Optional[float] = None) -> PreprocessResult:
         """执行完整的预处理流水线
 
         步骤：
@@ -172,7 +178,12 @@ class AutoPreprocessPipeline:
         5. 带通滤波
         6. 伪迹检测（在滤波后数据上）
         7. 记录伪迹到 MNE annotations
-        8. 返回结果
+        8. 频段分析（可选）
+        9. 返回结果
+
+        Args:
+            run_band_analysis: 是否执行频段分析
+            epoch_duration: 频段分析的分段窗口（秒），None 表示不分段
 
         Returns:
             PreprocessResult: 预处理结果对象
@@ -221,6 +232,22 @@ class AutoPreprocessPipeline:
         logger.info(f"标记 {len(artifacts)} 个伪迹")
         annotations = self._mark_artifacts(artifacts)
 
+        # 7.5 频段分析（可选）
+        band_analysis_result = None
+        if run_band_analysis:
+            logger.info("执行频段分析")
+            from app.services.band_analyzer import BandAnalyzer
+            analyzer = BandAnalyzer(
+                raw=self.raw,
+                epoch_duration=epoch_duration,
+            )
+            band_analysis_result = analyzer.analyze()
+            self.preprocess_log["band_analysis"] = {
+                "n_channels_analyzed": len(band_analysis_result.channel_results),
+                "n_epochs": len(band_analysis_result.epoch_results),
+            }
+            logger.info(f"频段分析完成: {len(band_analysis_result.channel_results)} 通道")
+
         logger.info("预处理流水线完成")
 
         # 8. 返回结果
@@ -229,6 +256,7 @@ class AutoPreprocessPipeline:
             artifacts=artifacts,
             preprocess_log=self.preprocess_log,
             artifact_annotations=annotations,
+            band_analysis=band_analysis_result,
         )
 
     def _identify_channel_types(self) -> Dict[str, str]:
