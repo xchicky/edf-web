@@ -11,6 +11,9 @@ from scipy import stats
 
 logger = logging.getLogger(__name__)
 
+# NumPy 版本兼容性：np.trapezoid (numpy >=2.0) 或 np.trapz (numpy <2.0)
+_trapz_func = np.trapezoid if hasattr(np, 'trapezoid') else np.trapz
+
 
 class AnalysisService:
     """EEG 信号分析服务"""
@@ -227,7 +230,7 @@ class AnalysisService:
                 band_psds = psd_mean[freq_mask]
 
                 # 绝对功率（积分）
-                absolute_power = float(np.trapezoid(band_psds, freqs[freq_mask]))
+                absolute_power = float(_trapz_func(band_psds, freqs[freq_mask]))
                 total_power += absolute_power
 
                 band_results[band_name] = {
