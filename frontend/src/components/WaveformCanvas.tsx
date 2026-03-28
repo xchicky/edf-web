@@ -1,6 +1,7 @@
 import React from 'react';
 import type { WaveformData } from '../store/edfStore';
 import { CursorOverlay } from './CursorOverlay';
+import { AnnotationLayer } from './AnnotationLayer';
 import { useEDFStore } from '../store/edfStore';
 
 interface WaveformCanvasProps {
@@ -43,6 +44,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   // 本地不再维护选择状态，确保与 store 同步
   // 跟踪鼠标按下位置，用于区分单击和拖拽
   const [mouseDownPos, setMouseDownPos] = React.useState<{x: number; y: number} | null>(null);
+  const [canvasSize, setCanvasSize] = React.useState({ width: 0, height: 0 });
   const [cursorInfo, setCursorInfo] = React.useState<{
     visible: boolean;
     x: number;
@@ -271,6 +273,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     }
 
     canvas.height = height;
+    setCanvasSize({ width, height });
 
     // Report actual height to parent for AmplitudeAxis alignment
     onHeightChange?.(height);
@@ -446,9 +449,9 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   }, [waveformData, channelColors, amplitudeScale, windowDuration, selectionStart, selectionEnd, isSelecting, currentTime]);
 
   return (
-    <>
-      <canvas 
-      ref={canvasRef} 
+    <div style={{ position: 'relative' }}>
+      <canvas
+      ref={canvasRef}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -456,6 +459,17 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       onMouseLeave={handleMouseLeave}
       style={{ cursor: 'crosshair' }}
     />
+    {waveformData && canvasSize.width > 0 && (
+      <AnnotationLayer
+        width={canvasSize.width}
+        height={canvasSize.height}
+        currentTime={currentTime}
+        windowDuration={windowDuration}
+        channels={waveformData.channels}
+        channelHeight={canvasSize.height / waveformData.channels.length}
+        leftMargin={50}
+      />
+    )}
     <CursorOverlay
       visible={cursorInfo.visible}
       x={cursorInfo.x}
@@ -464,6 +478,6 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       amplitude={cursorInfo.amplitude}
       channel={cursorInfo.channel}
     />
-  </>
+  </div>
   );
 };
