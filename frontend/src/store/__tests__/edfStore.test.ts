@@ -2,9 +2,10 @@
  * Zustand Store 单元测试
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useEDFStore } from '../edfStore';
 import * as signalStorage from '../../utils/signalStorage';
+import * as edfApi from '../../api/edf';
 import type { Signal } from '../../types/signal';
 
 // Mock localStorage
@@ -502,6 +503,39 @@ describe('useEDFStore - Analysis', () => {
   });
 
   describe('runAnalysis', () => {
+    const mockTimeDomainResponse = {
+      file_id: 'test-file',
+      channels: ['Fp1'],
+      statistics: {
+        Fp1: {
+          mean: 0, std: 1, min: -1, max: 1,
+          rms: 1, peak_to_peak: 2, kurtosis: 0,
+          skewness: 0, n_samples: 100,
+        },
+      },
+    };
+
+    beforeEach(() => {
+      vi.spyOn(edfApi, 'analyzeTimeDomain').mockResolvedValue(mockTimeDomainResponse as any);
+      vi.spyOn(edfApi, 'analyzeBandPower').mockResolvedValue({
+        file_id: 'test-file',
+        channels: ['Fp1'],
+        band_powers: {
+          Fp1: {
+            delta: { absolute: 1, relative: 0.2, range: [0.5, 4] },
+            theta: { absolute: 1, relative: 0.2, range: [4, 8] },
+            alpha: { absolute: 1, relative: 0.2, range: [8, 13] },
+            beta: { absolute: 1, relative: 0.2, range: [13, 30] },
+            gamma: { absolute: 1, relative: 0.2, range: [30, 100] },
+          },
+        },
+      } as any);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
     it('应正确设置加载状态并清除旧结果', async () => {
       const { runAnalysis } = useEDFStore.getState();
 
