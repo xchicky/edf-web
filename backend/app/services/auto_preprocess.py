@@ -19,9 +19,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# 延迟导入 BandAnalyzer 以避免循环依赖
+# 延迟导入 BandAnalyzer 和 AnomalyDetector 以避免循环依赖
 if TYPE_CHECKING:
     from app.services.band_analyzer import BandAnalysisReport
+    from app.services.anomaly_detector import AnomalyReport
 
 
 # ============================================================================
@@ -58,12 +59,14 @@ class PreprocessResult:
         preprocess_log: 每步处理的参数和统计
         artifact_annotations: MNE annotations 对象（伪迹标记）
         band_analysis: 频段分析报告（可选）
+        anomaly_report: 异常检测报告（可选）
     """
     raw_clean: mne.io.Raw
     artifacts: List[ArtifactEvent] = field(default_factory=list)
     preprocess_log: Dict[str, Any] = field(default_factory=dict)
     artifact_annotations: Optional[Any] = None
     band_analysis: Optional["BandAnalysisReport"] = None
+    anomaly_report: Optional["AnomalyReport"] = None
 
 
 # ============================================================================
@@ -100,6 +103,9 @@ class AutoPreprocessPipeline:
         # 频段分析参数
         run_band_analysis: bool = False,           # 是否运行频段分析
         band_analysis_epoch_duration: Optional[float] = None,  # 分段窗口（秒）
+        # 异常检测参数
+        run_anomaly_detection: bool = False,           # 是否运行异常检测
+        anomaly_sensitivity: float = 1.0,              # 异常检测灵敏度
     ):
         """
         初始化预处理流水线
@@ -120,6 +126,8 @@ class AutoPreprocessPipeline:
             artifact_window: 伪迹标记窗口大小（秒）
             run_band_analysis: 是否运行频段分析
             band_analysis_epoch_duration: 频段分析分段窗口（秒），None 表示不分段
+            run_anomaly_detection: 是否运行异常检测
+            anomaly_sensitivity: 异常检测灵敏度（>1 更灵敏，<1 更保守）
         """
         self.file_path = Path(file_path)
         self.reference = reference
@@ -140,6 +148,10 @@ class AutoPreprocessPipeline:
         # 频段分析参数
         self.run_band_analysis = run_band_analysis
         self.band_analysis_epoch_duration = band_analysis_epoch_duration
+
+        # 异常检测参数
+        self.run_anomaly_detection = run_anomaly_detection
+        self.anomaly_sensitivity = anomaly_sensitivity
 
         # 内部状态
         self.raw: Optional[mne.io.Raw] = None
@@ -188,6 +200,7 @@ class AutoPreprocessPipeline:
         6. 伪迹检测（在滤波后数据上）
         7. 记录伪迹到 MNE annotations
         8. 频段分析（可选）
+        8.5 异常检测（可选）
         9. 返回结果
 
         Returns:
@@ -251,6 +264,20 @@ class AutoPreprocessPipeline:
             logger.info("跳过频段分析")
             self.preprocess_log["band_analysis"] = None
 
+        # 8.5 异常检测（可选）
+        anomaly_report = None
+        if self.run_anomaly_detection:
+            logger.info("执行异常波形检测")
+            anomaly_report = self._run_anomaly_detection(band_analysis_report)
+            self.preprocess_log["anomaly_detection"] = {
+                "global_risk_score": anomaly_report.global_risk_score,
+                "anomaly_summary": anomaly_report.anomaly_summary,
+                "n_recommendations": len(anomaly_report.recommendations),
+            }
+        else:
+            logger.info("跳过异常检测")
+            self.preprocess_log["anomaly_detection"] = None
+
         logger.info("预处理流水线完成")
 
         # 9. 返回结果
@@ -260,6 +287,7 @@ class AutoPreprocessPipeline:
             preprocess_log=self.preprocess_log,
             artifact_annotations=annotations,
             band_analysis=band_analysis_report,
+            anomaly_report=anomaly_report,
         )
 
     def _identify_channel_types(self) -> Dict[str, str]:
@@ -925,6 +953,57 @@ class AutoPreprocessPipeline:
         logger.info(
             f"频段分析完成: {len(report.channel_results)} 个通道, "
             f"优势频段: {report.global_dominant_bands}"
+        )
+
+        return report
+
+    def _run_anomaly_detection(self, band_analysis_report=None) -> "AnomalyReport":
+        """运行异常波形检测
+
+        使用 AnomalyDetector 对预处理后的信号进行异常波形检测。
+
+        Args:
+            band_analysis_report: 频段分析报告（可选，用于慢波异常检测）
+
+        Returns:
+            AnomalyReport: 异常检测报告
+        """
+        from app.services.anomaly_detector import AnomalyDetector
+
+        # 识别 EEG 通道
+        eeg_channels = [
+            ch for ch, ch_type in self.channel_types.items()
+            if ch_type == "eeg" and ch in self.raw.ch_names
+        ]
+
+        if not eeg_channels:
+            logger.warning("没有找到 EEG 通道，跳过异常检测")
+            from app.services.anomaly_detector import AnomalyReport
+            return AnomalyReport(
+                channel_results={},
+                global_risk_score=0.0,
+                anomaly_summary={},
+                recommendations=["无 EEG 通道可分析"],
+                analysis_params={
+                    "n_channels": 0,
+                    "error": "No EEG channels found",
+                },
+            )
+
+        # 创建 AnomalyDetector
+        detector = AnomalyDetector(
+            raw=self.raw,
+            band_analysis=band_analysis_report,
+            eeg_channels=eeg_channels,
+            sensitivity=self.anomaly_sensitivity,
+        )
+
+        # 运行检测
+        report = detector.detect()
+
+        logger.info(
+            f"异常检测完成: global_risk_score={report.global_risk_score:.2f}, "
+            f"异常摘要={report.anomaly_summary}"
         )
 
         return report
