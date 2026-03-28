@@ -13,11 +13,15 @@ EEG 自动预处理流水线
 import mne
 import numpy as np
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Literal
+from typing import List, Dict, Any, Optional, Literal, TYPE_CHECKING
 from dataclasses import dataclass, field
 import logging
 
 logger = logging.getLogger(__name__)
+
+# 延迟导入 BandAnalyzer 以避免循环依赖
+if TYPE_CHECKING:
+    from app.services.band_analyzer import BandAnalysisReport
 
 
 # ============================================================================
@@ -53,11 +57,13 @@ class PreprocessResult:
         artifacts: 检测到的伪迹列表
         preprocess_log: 每步处理的参数和统计
         artifact_annotations: MNE annotations 对象（伪迹标记）
+        band_analysis: 频段分析报告（可选）
     """
     raw_clean: mne.io.Raw
     artifacts: List[ArtifactEvent] = field(default_factory=list)
     preprocess_log: Dict[str, Any] = field(default_factory=dict)
     artifact_annotations: Optional[Any] = None
+    band_analysis: Optional["BandAnalysisReport"] = None
 
 
 # ============================================================================
@@ -91,6 +97,9 @@ class AutoPreprocessPipeline:
         drift_threshold: float = 100.0,            # 漂移阈值（µV）
         jump_threshold: float = 200.0,             # 跳变阈值（µV）
         artifact_window: float = 0.5,              # 伪迹标记窗口（秒）
+        # 频段分析参数
+        run_band_analysis: bool = False,           # 是否运行频段分析
+        band_analysis_epoch_duration: Optional[float] = None,  # 分段窗口（秒）
     ):
         """
         初始化预处理流水线
@@ -109,6 +118,8 @@ class AutoPreprocessPipeline:
             drift_threshold: 漂移检测阈值（µV）
             jump_threshold: 跳变检测阈值（µV）
             artifact_window: 伪迹标记窗口大小（秒）
+            run_band_analysis: 是否运行频段分析
+            band_analysis_epoch_duration: 频段分析分段窗口（秒），None 表示不分段
         """
         self.file_path = Path(file_path)
         self.reference = reference
@@ -125,6 +136,10 @@ class AutoPreprocessPipeline:
         self.drift_threshold = drift_threshold
         self.jump_threshold = jump_threshold
         self.artifact_window = artifact_window
+
+        # 频段分析参数
+        self.run_band_analysis = run_band_analysis
+        self.band_analysis_epoch_duration = band_analysis_epoch_duration
 
         # 内部状态
         self.raw: Optional[mne.io.Raw] = None
@@ -172,7 +187,8 @@ class AutoPreprocessPipeline:
         5. 带通滤波
         6. 伪迹检测（在滤波后数据上）
         7. 记录伪迹到 MNE annotations
-        8. 返回结果
+        8. 频段分析（可选）
+        9. 返回结果
 
         Returns:
             PreprocessResult: 预处理结果对象
@@ -221,14 +237,29 @@ class AutoPreprocessPipeline:
         logger.info(f"标记 {len(artifacts)} 个伪迹")
         annotations = self._mark_artifacts(artifacts)
 
+        # 8. 频段分析（可选）
+        band_analysis_report = None
+        if self.run_band_analysis:
+            logger.info("执行频段分析")
+            band_analysis_report = self._run_band_analysis()
+            self.preprocess_log["band_analysis"] = {
+                "n_channels": len(band_analysis_report.channel_results),
+                "n_epochs": len(band_analysis_report.epoch_results),
+                "global_dominant_bands": band_analysis_report.global_dominant_bands,
+            }
+        else:
+            logger.info("跳过频段分析")
+            self.preprocess_log["band_analysis"] = None
+
         logger.info("预处理流水线完成")
 
-        # 8. 返回结果
+        # 9. 返回结果
         return PreprocessResult(
             raw_clean=self.raw.copy(),
             artifacts=artifacts,
             preprocess_log=self.preprocess_log,
             artifact_annotations=annotations,
+            band_analysis=band_analysis_report,
         )
 
     def _identify_channel_types(self) -> Dict[str, str]:
@@ -845,3 +876,55 @@ class AutoPreprocessPipeline:
         merged.append(current)
 
         return merged
+
+    def _run_band_analysis(self) -> "BandAnalysisReport":
+        """运行频段分析
+
+        使用 BandAnalyzer 对预处理后的信号进行频段分析。
+
+        Returns:
+            BandAnalysisReport: 频段分析报告
+        """
+        # 延迟导入 BandAnalyzer
+        from app.services.band_analyzer import BandAnalyzer
+
+        # 识别 EEG 通道
+        eeg_channels = [
+            ch for ch, ch_type in self.channel_types.items()
+            if ch_type == "eeg" and ch in self.raw.ch_names
+        ]
+
+        if not eeg_channels:
+            logger.warning("没有找到 EEG 通道，跳过频段分析")
+            # 返回空报告
+            from app.services.band_analyzer import BandAnalysisReport
+            return BandAnalysisReport(
+                channel_results={},
+                global_dominant_bands={},
+                epoch_results=[],
+                analysis_params={
+                    'n_channels': 0,
+                    'channels': [],
+                    'sfreq': float(self.raw.info['sfreq']),
+                    'epoch_duration': self.band_analysis_epoch_duration,
+                    'error': 'No EEG channels found',
+                },
+            )
+
+        # 创建 BandAnalyzer
+        analyzer = BandAnalyzer(
+            raw=self.raw,
+            epoch_duration=self.band_analysis_epoch_duration,
+            eeg_channels=eeg_channels,
+            include_gamma=True,  # 默认包含 gamma 频段
+        )
+
+        # 运行分析
+        report = analyzer.analyze()
+
+        logger.info(
+            f"频段分析完成: {len(report.channel_results)} 个通道, "
+            f"优势频段: {report.global_dominant_bands}"
+        )
+
+        return report
