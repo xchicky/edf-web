@@ -23,6 +23,7 @@ import { AmplitudeAxis } from './components/AmplitudeAxis';
 import { ResolutionIndicator } from './components/ResolutionIndicator';
 import { InteractionHint } from './components/InteractionHint';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
+import { AnnotationPanel } from './components/AnnotationPanel';
 import './App.css';
 
 function App() {
@@ -1026,6 +1027,12 @@ function App() {
                 onDelete={handleDeleteSignal}
                 onToggle={handleToggleSignal}
                 onAddNew={handleAddNewSignal}
+              />
+
+              <AnnotationPanel
+                fileId={metadata?.file_id || null}
+                channels={metadata?.channel_names || []}
+                onJumpToTime={(time) => setCurrentTime(time)}
               />
             </>
           )}
