@@ -1,7 +1,9 @@
 import React from 'react';
 import type { WaveformData } from '../store/edfStore';
 import { CursorOverlay } from './CursorOverlay';
+import { AnnotationLayer } from './AnnotationLayer';
 import { useEDFStore } from '../store/edfStore';
+import { useAnnotationStore } from '../store/annotationStore';
 
 interface WaveformCanvasProps {
   waveformData: WaveformData;
@@ -39,6 +41,9 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const gridCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = React.useRef<number | null>(null);
+  // 标注数据
+  const { getAnnotationsForTimeWindow } = useAnnotationStore();
+  const visibleAnnotations = getAnnotationsForTimeWindow(currentTime, currentTime + windowDuration);
   // 选择状态直接从 store 获取（通过 props 传入）
   // 本地不再维护选择状态，确保与 store 同步
   // 跟踪鼠标按下位置，用于区分单击和拖拽
@@ -446,9 +451,9 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   }, [waveformData, channelColors, amplitudeScale, windowDuration, selectionStart, selectionEnd, isSelecting, currentTime]);
 
   return (
-    <>
-      <canvas 
-      ref={canvasRef} 
+    <div style={{ position: 'relative' }}>
+      <canvas
+      ref={canvasRef}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -456,6 +461,16 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       onMouseLeave={handleMouseLeave}
       style={{ cursor: 'crosshair' }}
     />
+    {canvasRef.current && visibleAnnotations.length > 0 && (
+      <AnnotationLayer
+        annotations={visibleAnnotations}
+        currentTime={currentTime}
+        windowDuration={windowDuration}
+        canvasWidth={canvasRef.current.width}
+        canvasHeight={canvasRef.current.height}
+        channels={waveformData.channels}
+      />
+    )}
     <CursorOverlay
       visible={cursorInfo.visible}
       x={cursorInfo.x}
@@ -464,6 +479,6 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       amplitude={cursorInfo.amplitude}
       channel={cursorInfo.channel}
     />
-  </>
+  </div>
   );
 };

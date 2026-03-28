@@ -4,6 +4,7 @@ import React, { useEffect, useCallback, useState } from 'react';
 import debounce from 'lodash.debounce';
 import { uploadEDF, getWaveform, calculateSignals } from './api/edf';
 import { useEDFStore } from './store/edfStore';
+import { useAnnotationStore } from './store/annotationStore';
 import { ChannelSelector } from './components/ChannelSelector';
 import { ModeSelector } from './components/ModeSelector';
 import { ModeEditor } from './components/ModeEditor';
@@ -87,6 +88,10 @@ function App() {
     updateModeRecommendations,
     getCurrentMode,
   } = useEDFStore();
+
+  const {
+    generateAnnotations: generateAnnotationsAction,
+  } = useAnnotationStore();
 
   // Signal management state
   const [isSignalEditorOpen, setIsSignalEditorOpen] = useState(false);
@@ -356,6 +361,15 @@ function App() {
       updateModeRecommendations(metadata.channel_names);
     }
   }, [metadata, updateModeRecommendations]);
+
+  // Generate annotations after EDF file is loaded
+  useEffect(() => {
+    if (metadata?.file_id && import.meta.env.MODE !== 'test') {
+      generateAnnotationsAction(metadata.file_id).catch(() => {
+        // Silently fail - annotations are optional
+      });
+    }
+  }, [metadata?.file_id, generateAnnotationsAction]);
 
   // Merge original waveform data with derived signal data
   const mergedWaveformData = React.useMemo(() => {
