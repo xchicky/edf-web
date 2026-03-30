@@ -83,6 +83,38 @@ class TestDemoMetadataEndpoint:
         mock_get_path.assert_called_once_with("dev-demo")
 
 
+class TestDemoEdfPathResolution:
+    """Tests for DEMO_EDF_PATH path resolution correctness"""
+
+    def test_demo_edf_path_points_to_project_root_edf_dir(self):
+        """DEMO_EDF_PATH should resolve to <project_root>/edf/demo.edf, not backend/edf/demo.edf"""
+        from app.services.file_manager import DEMO_EDF_PATH
+
+        # Path must end with edf/demo.edf
+        assert DEMO_EDF_PATH.name == "demo.edf"
+        assert DEMO_EDF_PATH.parent.name == "edf"
+
+        # The parent of edf/ should NOT be "backend" — it should be the project root
+        project_root = DEMO_EDF_PATH.parent.parent
+        assert project_root.name != "backend", (
+            f"DEMO_EDF_PATH resolves to {DEMO_EDF_PATH}, which is under backend/. "
+            f"Should be under project root."
+        )
+
+    def test_demo_edf_path_resolution_from_services_dir(self):
+        """Verify the parent chain: file_manager.py → services → app → backend → project_root"""
+        from app.services.file_manager import DEMO_EDF_PATH
+        import app.services.file_manager as fm
+
+        # __file__ of file_manager.py
+        fm_file = Path(fm.__file__).resolve()
+        # 4 parents up from file_manager.py should reach project root
+        project_root = fm_file.parent.parent.parent.parent
+        expected = project_root / "edf" / "demo.edf"
+
+        assert DEMO_EDF_PATH == expected
+
+
 class TestFileManagerDevDemo:
     """Tests for file_manager.get_file_path dev-demo mapping"""
 

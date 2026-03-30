@@ -16,7 +16,8 @@ UPLOAD_DIR = Path(__name__).resolve().parent.parent / "storage" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Dev demo file path (project root edf/demo.edf)
-DEMO_EDF_PATH = Path(__file__).resolve().parent.parent.parent / "edf" / "demo.edf"
+# file_manager.py is at backend/app/services/file_manager.py → 4 parents to reach project root
+DEMO_EDF_PATH = Path(__file__).resolve().parent.parent.parent.parent / "edf" / "demo.edf"
 
 # Maximum file size: 500MB
 MAX_UPLOAD_SIZE = 500 * 1024 * 1024
