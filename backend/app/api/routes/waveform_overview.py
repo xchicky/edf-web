@@ -2,6 +2,8 @@
 Waveform overview endpoint - Get downsampled waveform data for overview strip
 """
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from app.services.edf_parser import EDFParser
@@ -12,6 +14,50 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _get_overview_data(file_path: str, samples_per_second: float, channel_indices):
+    """Synchronous overview data retrieval (runs in thread pool)."""
+    parser = EDFParser(file_path)
+    parser.load()
+
+    metadata = parser.get_metadata()
+    original_sfreq = metadata["sfreq"]
+    duration_seconds = metadata["duration_seconds"]
+
+    downsampling_factor = max(1, int(original_sfreq / samples_per_second))
+
+    logger.info(
+        f"Generating overview: {duration_seconds}s at {samples_per_second} Hz, "
+        f"downsampling factor: {downsampling_factor}"
+    )
+
+    raw_cropped = parser.raw.copy()
+    raw_cropped.load_data()
+
+    if channel_indices is not None:
+        channel_names = [raw_cropped.ch_names[i] for i in channel_indices]
+        raw_cropped.pick_channels(channel_names)
+    else:
+        channel_indices = list(range(len(raw_cropped.ch_names)))
+
+    data = raw_cropped.get_data(units="µV")
+    downsampled_data = data[:, ::downsampling_factor]
+
+    n_samples = downsampled_data.shape[1]
+    times = np.linspace(0, duration_seconds, n_samples)
+
+    return {
+        "data": downsampled_data.tolist(),
+        "times": times.tolist(),
+        "channels": [raw_cropped.ch_names[i] for i in channel_indices],
+        "sfreq": float(samples_per_second),
+        "n_samples": int(n_samples),
+        "start_time": 0.0,
+        "duration": float(duration_seconds),
+        "original_sfreq": float(original_sfreq),
+        "downsampling_factor": int(downsampling_factor),
+    }
 
 
 @router.get("/{file_id}")
@@ -34,64 +80,15 @@ async def get_waveform_overview(
         JSON response with downsampled waveform data
     """
     try:
-        # Parse channels parameter
         channel_indices = None
         if channels:
             channel_indices = [int(c.strip()) for c in channels.split(",")]
 
-        # Get file path
         file_path = get_file_path(file_id)
 
-        # Parse EDF file
-        parser = EDFParser(file_path)
-        parser.load()
-
-        # Get metadata
-        metadata = parser.get_metadata()
-        original_sfreq = metadata["sfreq"]
-        duration_seconds = metadata["duration_seconds"]
-
-        # Calculate downsampling factor
-        downsampling_factor = max(1, int(original_sfreq / samples_per_second))
-
-        logger.info(
-            f"Generating overview: {duration_seconds}s at {samples_per_second} Hz, "
-            f"downsampling factor: {downsampling_factor}"
+        return await asyncio.to_thread(
+            _get_overview_data, file_path, samples_per_second, channel_indices,
         )
-
-        # Load full file with memory optimization
-        raw_cropped = parser.raw.copy()
-        raw_cropped.load_data()
-
-        # Select channels
-        if channel_indices is not None:
-            channel_names = [raw_cropped.ch_names[i] for i in channel_indices]
-            raw_cropped.pick_channels(channel_names)
-        else:
-            channel_indices = list(range(len(raw_cropped.ch_names)))
-
-        # Get data
-        data = raw_cropped.get_data(units="µV")
-
-        # Downsample by taking every Nth sample
-        downsampled_data = data[:, ::downsampling_factor]
-
-        # Generate downsampled time array
-        n_samples = downsampled_data.shape[1]
-        times = np.linspace(0, duration_seconds, n_samples)
-
-        # Convert to list for JSON serialization
-        return {
-            "data": downsampled_data.tolist(),
-            "times": times.tolist(),
-            "channels": [raw_cropped.ch_names[i] for i in channel_indices],
-            "sfreq": float(samples_per_second),
-            "n_samples": int(n_samples),
-            "start_time": 0.0,
-            "duration": float(duration_seconds),
-            "original_sfreq": float(original_sfreq),
-            "downsampling_factor": int(downsampling_factor),
-        }
 
     except FileNotFoundError:
         logger.error(f"File not found: {file_id}")

@@ -2,6 +2,8 @@
 Metadata endpoint - Get EDF file metadata
 """
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 from app.services.edf_parser import EDFParser
 from app.services.file_manager import get_file_path
@@ -10,6 +12,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _load_metadata(file_path: str):
+    """Synchronous metadata loading (runs in thread pool)."""
+    parser = EDFParser(file_path)
+    parser.load()
+    return parser.get_metadata()
 
 
 @router.get("/{file_id}")
@@ -24,15 +33,9 @@ async def get_metadata(file_id: str):
         JSON response with EDF metadata
     """
     try:
-        # Get file path
         file_path = get_file_path(file_id)
 
-        # Parse EDF file
-        parser = EDFParser(file_path)
-        parser.load()
-        metadata = parser.get_metadata()
-
-        # Add file_id to response
+        metadata = await asyncio.to_thread(_load_metadata, file_path)
         metadata["file_id"] = file_id
 
         logger.info(

@@ -2,6 +2,8 @@
 Waveform endpoint - Get waveform data for specific time window
 """
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, validator
 from typing import List, Optional
@@ -30,6 +32,15 @@ class WaveformRequest(BaseModel):
         return v
 
 
+def _get_waveform_data(file_path: str, start: float, duration: float, channels):
+    """Synchronous waveform data retrieval (runs in thread pool)."""
+    parser = EDFParser(file_path)
+    parser.load()
+    return parser.get_waveform_chunk(
+        start_time=start, duration=duration, channels=channels,
+    )
+
+
 @router.post("/{file_id}")
 async def get_waveform(file_id: str, request: WaveformRequest):
     """
@@ -43,21 +54,12 @@ async def get_waveform(file_id: str, request: WaveformRequest):
         JSON response with waveform data
     """
     try:
-        # Get file path
         file_path = get_file_path(file_id)
 
-        # Parse EDF file
-        parser = EDFParser(file_path)
-        parser.load()
-
-        # Extract waveform chunk
-        waveform_data = parser.get_waveform_chunk(
-            start_time=request.start,
-            duration=request.duration,
-            channels=request.channels,
+        waveform_data = await asyncio.to_thread(
+            _get_waveform_data,
+            file_path, request.start, request.duration, request.channels,
         )
-
-        # Add file_id to response
         waveform_data["file_id"] = file_id
 
         logger.info(
@@ -101,24 +103,16 @@ async def get_waveform_get(
         JSON response with waveform data
     """
     try:
-        # Parse channels parameter
         channel_indices = None
         if channels:
             channel_indices = [int(c.strip()) for c in channels.split(",")]
 
-        # Get file path
         file_path = get_file_path(file_id)
 
-        # Parse EDF file
-        parser = EDFParser(file_path)
-        parser.load()
-
-        # Extract waveform chunk
-        waveform_data = parser.get_waveform_chunk(
-            start_time=start, duration=duration, channels=channel_indices
+        waveform_data = await asyncio.to_thread(
+            _get_waveform_data,
+            file_path, start, duration, channel_indices,
         )
-
-        # Add file_id to response
         waveform_data["file_id"] = file_id
 
         logger.info(

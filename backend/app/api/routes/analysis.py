@@ -2,6 +2,8 @@
 Analysis API endpoint - Time domain stats, frequency analysis, and comprehensive analysis
 """
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -109,45 +111,25 @@ class ComprehensiveResponse(BaseModel):
 async def analyze_time_domain(file_id: str, request: TimeDomainRequest):
     """
     时域统计分析
-
-    计算指定时间窗口内各通道的统计量：
-    - mean: 平均值
-    - std: 标准差
-    - min/max: 最小/最大值
-    - rms: 均方根
-    - peak_to_peak: 峰峰值
-    - kurtosis: 峰度
-    - skewness: 偏度
-
-    Args:
-        file_id: EDF 文件 ID
-        request: 包含 channels（可选）、start、duration
-
-    Returns:
-        时域统计结果
     """
     try:
-        # 获取文件路径
         file_path = get_file_path(file_id)
 
-        # 创建分析服务
-        analyzer = AnalysisService(file_path)
+        def _compute():
+            analyzer = AnalysisService(file_path)
+            return analyzer.compute_time_domain_stats(
+                start_time=request.start,
+                duration=request.duration,
+                channels=request.channels,
+            )
 
-        # 计算时域统计
-        results = analyzer.compute_time_domain_stats(
-            start_time=request.start,
-            duration=request.duration,
-            channels=request.channels,
-        )
+        results = await asyncio.to_thread(_compute)
 
-        # 确定通道列表
         if request.channels is None:
-            # 从结果中获取通道
             channels = list(results.keys())
         else:
             channels = request.channels
 
-        # 构建响应
         statistics = {}
         for ch in channels:
             if ch in results:
@@ -176,29 +158,10 @@ async def analyze_time_domain(file_id: str, request: TimeDomainRequest):
 async def analyze_band_power(file_id: str, request: BandPowerRequest):
     """
     频带功率分析
-
-    计算各 EEG 频带的绝对功率和相对功率：
-    - delta: 0.5-4 Hz
-    - theta: 4-8 Hz
-    - alpha: 8-13 Hz
-    - beta: 13-30 Hz
-    - gamma: 30-50 Hz
-
-    Args:
-        file_id: EDF 文件 ID
-        request: 包含 channels（可选）、start、duration、bands（可选）
-
-    Returns:
-        频带功率结果
     """
     try:
-        # 获取文件路径
         file_path = get_file_path(file_id)
 
-        # 创建分析服务
-        analyzer = AnalysisService(file_path)
-
-        # 转换频带格式
         bands = None
         if request.bands is not None:
             bands = {
@@ -206,21 +169,22 @@ async def analyze_band_power(file_id: str, request: BandPowerRequest):
                 for name, range_ in request.bands.items()
             }
 
-        # 计算频带功率
-        results = analyzer.compute_band_power(
-            start_time=request.start,
-            duration=request.duration,
-            channels=request.channels,
-            bands=bands,
-        )
+        def _compute():
+            analyzer = AnalysisService(file_path)
+            return analyzer.compute_band_power(
+                start_time=request.start,
+                duration=request.duration,
+                channels=request.channels,
+                bands=bands,
+            )
 
-        # 确定通道列表
+        results = await asyncio.to_thread(_compute)
+
         if request.channels is None:
             channels = list(results.keys())
         else:
             channels = request.channels
 
-        # 构建响应
         band_powers = {}
         for ch in channels:
             if ch in results:
@@ -255,39 +219,27 @@ async def analyze_band_power(file_id: str, request: BandPowerRequest):
 async def analyze_psd(file_id: str, request: PSDRequest):
     """
     功率谱密度 (PSD) 分析
-
-    使用 Welch 方法计算功率谱密度
-
-    Args:
-        file_id: EDF 文件 ID
-        request: 包含 channels（可选）、start、duration、fmin、fmax
-
-    Returns:
-        PSD 结果（频率数组和功率值）
     """
     try:
-        # 获取文件路径
         file_path = get_file_path(file_id)
 
-        # 创建分析服务
-        analyzer = AnalysisService(file_path)
+        def _compute():
+            analyzer = AnalysisService(file_path)
+            return analyzer.compute_psd(
+                start_time=request.start,
+                duration=request.duration,
+                channels=request.channels,
+                fmin=request.fmin,
+                fmax=request.fmax,
+            )
 
-        # 计算 PSD
-        results = analyzer.compute_psd(
-            start_time=request.start,
-            duration=request.duration,
-            channels=request.channels,
-            fmin=request.fmin,
-            fmax=request.fmax,
-        )
+        results = await asyncio.to_thread(_compute)
 
-        # 确定通道列表
         if request.channels is None:
             channels = list(results.keys())
         else:
             channels = request.channels
 
-        # 构建响应
         psd_data = {}
         for ch in channels:
             if ch in results:
@@ -317,22 +269,10 @@ async def analyze_comprehensive(file_id: str, request: ComprehensiveRequest):
     综合分析
 
     同时返回时域统计、频带功率和 PSD 结果
-
-    Args:
-        file_id: EDF 文件 ID
-        request: 包含 channels（可选）、start、duration、fmin、fmax、bands（可选）
-
-    Returns:
-        综合分析结果
     """
     try:
-        # 获取文件路径
         file_path = get_file_path(file_id)
 
-        # 创建分析服务
-        analyzer = AnalysisService(file_path)
-
-        # 转换频带格式
         bands = None
         if request.bands is not None:
             bands = {
@@ -340,17 +280,39 @@ async def analyze_comprehensive(file_id: str, request: ComprehensiveRequest):
                 for name, range_ in request.bands.items()
             }
 
-        # 确定通道列表
-        channels = request.channels
+        channels_arg = request.channels
 
-        # 计算时域统计
-        time_domain_results = analyzer.compute_time_domain_stats(
-            start_time=request.start,
-            duration=request.duration,
-            channels=channels,
+        def _compute_all():
+            analyzer = AnalysisService(file_path)
+
+            td_results = analyzer.compute_time_domain_stats(
+                start_time=request.start,
+                duration=request.duration,
+                channels=channels_arg,
+            )
+
+            bp_results = analyzer.compute_band_power(
+                start_time=request.start,
+                duration=request.duration,
+                channels=channels_arg,
+                bands=bands,
+            )
+
+            psd_results = analyzer.compute_psd(
+                start_time=request.start,
+                duration=request.duration,
+                channels=channels_arg,
+                fmin=request.fmin,
+                fmax=request.fmax,
+            )
+
+            return td_results, bp_results, psd_results
+
+        time_domain_results, band_power_results, psd_results = await asyncio.to_thread(
+            _compute_all
         )
 
-        # 构建时域统计响应
+        channels = channels_arg
         time_domain = {}
         if channels is None:
             channels = list(time_domain_results.keys())
@@ -359,15 +321,6 @@ async def analyze_comprehensive(file_id: str, request: ComprehensiveRequest):
             if ch in time_domain_results:
                 time_domain[ch] = ChannelTimeDomainStats(**time_domain_results[ch])
 
-        # 计算频带功率
-        band_power_results = analyzer.compute_band_power(
-            start_time=request.start,
-            duration=request.duration,
-            channels=channels,
-            bands=bands,
-        )
-
-        # 构建频带功率响应
         band_power = {}
         for ch in channels:
             if ch in band_power_results:
@@ -379,16 +332,6 @@ async def analyze_comprehensive(file_id: str, request: ComprehensiveRequest):
                         range=band_data["range"],
                     )
 
-        # 计算 PSD
-        psd_results = analyzer.compute_psd(
-            start_time=request.start,
-            duration=request.duration,
-            channels=channels,
-            fmin=request.fmin,
-            fmax=request.fmax,
-        )
-
-        # 构建 PSD 响应
         psd = {}
         for ch in channels:
             if ch in psd_results:

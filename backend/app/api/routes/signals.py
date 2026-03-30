@@ -2,6 +2,8 @@
 Signals API endpoint - Validate and calculate derived signals
 """
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -109,9 +111,6 @@ async def calculate_signals(request: SignalCalculationRequest):
         # 获取文件路径
         file_path = get_file_path(request.file_id)
 
-        # 创建计算器
-        calculator = SignalCalculator(file_path)
-
         # 转换信号定义为字典格式
         signals_data = []
         for signal in request.signals:
@@ -128,12 +127,16 @@ async def calculate_signals(request: SignalCalculationRequest):
                 ],
             })
 
-        # 计算信号
-        results = calculator.calculate_signals(
-            signals_data,
-            request.start,
-            request.duration,
-        )
+        def _compute():
+            calculator = SignalCalculator(file_path)
+            return calculator.calculate_signals(
+                signals_data,
+                request.start,
+                request.duration,
+            )
+
+        # 计算信号（在线程池中执行阻塞操作）
+        results = await asyncio.to_thread(_compute)
 
         # 转换结果
         response_results = []
