@@ -4,6 +4,8 @@ Anomaly Detection API endpoint - EEG 异常波形检测分析
 提供棘波、尖波、棘慢复合波、慢波异常、节律异常检测功能。
 """
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -109,107 +111,77 @@ def _convert_channel_result_to_response(result) -> ChannelAnomalyResultResponse:
 async def detect_anomalies(file_id: str, request: AnomalyDetectionRequest):
     """
     EEG 异常波形检测分析
-
-    对 EEG 信号进行异常波形检测，包括：
-    - 棘波 (spike) 和尖波 (sharp_wave) 检测
-    - 棘慢复合波 (spike_and_slow) 检测
-    - 慢波异常 (slow_wave) 检测
-    - 节律异常 (rhythmic) 检测
-    - 综合风险评估和临床建议
-
-    Args:
-        file_id: EDF 文件 ID
-        request: 包含 channels（可选）、start、duration、sensitivity、run_preprocess
-
-    Returns:
-        完整的异常检测报告
     """
     try:
-        # 获取文件路径
         file_path = get_file_path(file_id)
 
-        # 加载 EDF 文件
-        parser = EDFParser(file_path)
+        def _detect():
+            parser = EDFParser(file_path)
 
-        # 裁剪到指定时间段
-        raw = parser.raw.copy().crop(
-            tmin=request.start,
-            tmax=request.start + request.duration
-        )
-
-        # 如果指定了通道，则选择通道
-        if request.channels is not None:
-            # 验证通道存在
-            for ch in request.channels:
-                if ch not in raw.ch_names:
-                    raise ValueError(f"Channel {ch} not found in EDF file")
-            raw.pick_channels(request.channels)
-
-        # 加载数据
-        raw.load_data()
-
-        # 根据是否预处理选择不同的处理流程
-        if request.run_preprocess:
-            # 执行预处理流水线
-            logger.info(f"Running preprocess pipeline for {file_id}")
-
-            # 临时保存裁剪后的 raw 到文件，用于 AutoPreprocessPipeline
-            import tempfile
-            with tempfile.NamedTemporaryFile(suffix='.edf', delete=False) as tmp:
-                tmp_path = tmp.name
-                raw.export(tmp_path, fmt='edf', overwrite=True)
-
-            try:
-                # 运行预处理流水线
-                pipeline = AutoPreprocessPipeline(
-                    file_path=tmp_path,
-                    reference="average",
-                    notch_freq=50.0,
-                    bandpass_low=0.5,
-                    bandpass_high=50.0,
-                    run_band_analysis=True,  # 运行频段分析
-                )
-
-                preprocess_result = pipeline.run()
-
-                # 使用清洗后的信号和频段分析结果
-                raw_for_detection = preprocess_result.raw_clean
-                band_analysis = preprocess_result.band_analysis
-
-            finally:
-                # 清理临时文件
-                import os
-                try:
-                    os.unlink(tmp_path)
-                except:
-                    pass
-
-        else:
-            # 不预处理，直接使用原始信号
-            logger.info(f"Skipping preprocess for {file_id}")
-            raw_for_detection = raw
-
-            # 运行 BandAnalyzer 获取频段分析
-            band_analyzer = BandAnalyzer(
-                raw=raw_for_detection,
-                epoch_duration=None,
-                eeg_channels=request.channels,
-                include_gamma=False,
+            raw = parser.raw.copy().crop(
+                tmin=request.start,
+                tmax=request.start + request.duration,
             )
-            band_analysis = band_analyzer.analyze()
 
-        # 创建 AnomalyDetector
-        detector = AnomalyDetector(
-            raw=raw_for_detection,
-            band_analysis=band_analysis,
-            eeg_channels=request.channels,
-            sensitivity=request.sensitivity,
-        )
+            if request.channels is not None:
+                for ch in request.channels:
+                    if ch not in raw.ch_names:
+                        raise ValueError(f"Channel {ch} not found in EDF file")
+                raw.pick_channels(request.channels)
 
-        # 执行异常检测
-        report = detector.detect()
+            raw.load_data()
 
-        # 转换为响应格式
+            if request.run_preprocess:
+                logger.info(f"Running preprocess pipeline for {file_id}")
+
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.edf', delete=False) as tmp:
+                    tmp_path = tmp.name
+                    raw.export(tmp_path, fmt='edf', overwrite=True)
+
+                try:
+                    pipeline = AutoPreprocessPipeline(
+                        file_path=tmp_path,
+                        reference="average",
+                        notch_freq=50.0,
+                        bandpass_low=0.5,
+                        bandpass_high=50.0,
+                        run_band_analysis=True,
+                    )
+
+                    preprocess_result = pipeline.run()
+                    raw_for_detection = preprocess_result.raw_clean
+                    band_analysis = preprocess_result.band_analysis
+
+                finally:
+                    import os
+                    try:
+                        os.unlink(tmp_path)
+                    except:
+                        pass
+            else:
+                logger.info(f"Skipping preprocess for {file_id}")
+                raw_for_detection = raw
+
+                band_analyzer = BandAnalyzer(
+                    raw=raw_for_detection,
+                    epoch_duration=None,
+                    eeg_channels=request.channels,
+                    include_gamma=False,
+                )
+                band_analysis = band_analyzer.analyze()
+
+            detector = AnomalyDetector(
+                raw=raw_for_detection,
+                band_analysis=band_analysis,
+                eeg_channels=request.channels,
+                sensitivity=request.sensitivity,
+            )
+
+            return detector.detect()
+
+        report = await asyncio.to_thread(_detect)
+
         channel_results = {
             name: _convert_channel_result_to_response(result)
             for name, result in report.channel_results.items()

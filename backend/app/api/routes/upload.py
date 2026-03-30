@@ -2,6 +2,8 @@
 Upload endpoint - Handle EDF file uploads
 """
 
+import asyncio
+
 from fastapi import APIRouter, UploadFile, HTTPException, File
 from app.services.edf_parser import EDFParser
 from app.services.file_manager import save_upload_file, get_file_path
@@ -11,6 +13,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _parse_edf_metadata(file_path: str, file_id: str):
+    """Synchronous EDF parsing (runs in thread pool)."""
+    parser = EDFParser(file_path)
+    parser.load()
+    metadata = parser.get_metadata()
+    metadata["file_id"] = file_id
+    return metadata
 
 
 @router.post("/")
@@ -24,28 +35,19 @@ async def upload_edf(file: UploadFile = File(...)):
     Returns:
         JSON response with file_id and metadata
     """
-    # Validate file extension
     if not file.filename.lower().endswith(".edf"):
         raise HTTPException(
             status_code=422,
             detail=f"Invalid file format. Only .edf files are supported. Got: {file.filename}",
         )
 
-    # Generate unique file ID
     file_id = str(uuid.uuid4())
 
     try:
-        # Save file to disk
         file_path = await save_upload_file(file, file_id)
         logger.info(f"File uploaded: {file.filename} -> {file_path}")
 
-        # Parse EDF file
-        parser = EDFParser(file_path)
-        parser.load()
-        metadata = parser.get_metadata()
-
-        # Add file_id to response
-        metadata["file_id"] = file_id
+        metadata = await asyncio.to_thread(_parse_edf_metadata, file_path, file_id)
 
         logger.info(
             f"EDF parsed successfully: {metadata['n_channels']} channels, {metadata['duration_seconds']}s"
@@ -76,11 +78,16 @@ async def get_demo_metadata():
 
     try:
         file_path = get_file_path("dev-demo")
-        parser = EDFParser(file_path)
-        parser.load()
-        metadata = parser.get_metadata()
-        metadata["file_id"] = "dev-demo"
-        return metadata
+
+        def _load_demo():
+            parser = EDFParser(file_path)
+            parser.load()
+            metadata = parser.get_metadata()
+            metadata["file_id"] = "dev-demo"
+            return metadata
+
+        return await asyncio.to_thread(_load_demo)
+
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Demo EDF file not found")
     except Exception as e:

@@ -4,6 +4,8 @@ Band Analysis API endpoint - EEG 频段波形识别分析
 提供频段分解、特征提取、优势频段识别、时间分段分析等功能。
 """
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -103,56 +105,37 @@ def _convert_epoch_to_response(epoch) -> EpochResultResponse:
 async def analyze_bands(file_id: str, request: BandAnalysisRequest):
     """
     EEG 频段波形识别分析
-
-    对预处理后的 EEG 信号进行频段分析，包括：
-    - 频段分解：delta (0.5-4Hz), theta (4-8Hz), alpha (8-13Hz), beta (13-30Hz), gamma (30-50Hz)
-    - 特征提取：绝对功率、相对功率、峰值频率
-    - 优势频段识别：每个通道和全局的优势频段
-    - 时间分段分析：按固定窗口分段分析（可选）
-
-    Args:
-        file_id: EDF 文件 ID
-        request: 包含 channels（可选）、start、duration、epoch_duration（可选）、include_gamma
-
-    Returns:
-        完整的频段分析报告
     """
     try:
-        # 获取文件路径
         file_path = get_file_path(file_id)
 
-        # 加载 EDF 文件
-        parser = EDFParser(file_path)
+        def _analyze():
+            parser = EDFParser(file_path)
 
-        # 裁剪到指定时间段
-        raw = parser.raw.copy().crop(
-            tmin=request.start,
-            tmax=request.start + request.duration
-        )
+            raw = parser.raw.copy().crop(
+                tmin=request.start,
+                tmax=request.start + request.duration,
+            )
 
-        # 如果指定了通道，则选择通道
-        if request.channels is not None:
-            # 验证通道存在
-            for ch in request.channels:
-                if ch not in raw.ch_names:
-                    raise ValueError(f"Channel {ch} not found in EDF file")
-            raw.pick_channels(request.channels)
+            if request.channels is not None:
+                for ch in request.channels:
+                    if ch not in raw.ch_names:
+                        raise ValueError(f"Channel {ch} not found in EDF file")
+                raw.pick_channels(request.channels)
 
-        # 加载数据
-        raw.load_data()
+            raw.load_data()
 
-        # 创建 BandAnalyzer
-        analyzer = BandAnalyzer(
-            raw=raw,
-            epoch_duration=request.epoch_duration,
-            eeg_channels=None,  # 让 analyzer 自动识别
-            include_gamma=request.include_gamma,
-        )
+            analyzer = BandAnalyzer(
+                raw=raw,
+                epoch_duration=request.epoch_duration,
+                eeg_channels=None,
+                include_gamma=request.include_gamma,
+            )
 
-        # 执行分析
-        report = analyzer.analyze()
+            return analyzer.analyze()
 
-        # 转换为响应格式
+        report = await asyncio.to_thread(_analyze)
+
         channel_results = {
             name: _convert_channel_result_to_response(result)
             for name, result in report.channel_results.items()

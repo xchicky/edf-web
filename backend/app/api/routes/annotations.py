@@ -4,6 +4,8 @@ Annotations API endpoint - EEG 标注系统
 提供伪迹检测、频段分析、异常检测结果的统一标注格式，支持生成、查询和用户标注管理。
 """
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -146,7 +148,8 @@ async def generate_annotations(
             f"sensitivity={request.anomaly_sensitivity}"
         )
 
-        annotation_set = manager.generate_annotations(
+        annotation_set = await asyncio.to_thread(
+            manager.generate_annotations,
             file_id=file_id,
             run_band_analysis=request.run_band_analysis,
             run_anomaly_detection=request.run_anomaly_detection,
@@ -206,7 +209,8 @@ async def get_annotations(
             f"start={start}, end={end}, types={type_list}, channels={channel_list}"
         )
 
-        annotation_set = manager.get_annotations(
+        annotation_set = await asyncio.to_thread(
+            manager.get_annotations,
             file_id=file_id,
             start=start,
             end=end,
