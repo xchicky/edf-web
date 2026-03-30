@@ -325,6 +325,23 @@ describe('WaveformCanvas', () => {
     })
   })
 
+  describe('Wrapper Container', () => {
+    it('should have width: 100% on wrapper div for correct canvas sizing', () => {
+      render(<WaveformCanvas {...defaultProps} />)
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement
+      const wrapper = canvas.parentElement
+      expect(wrapper).toBeInTheDocument()
+      expect(wrapper?.style.width).toBe('100%')
+    })
+
+    it('should have position: relative on wrapper div for overlay positioning', () => {
+      render(<WaveformCanvas {...defaultProps} />)
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement
+      const wrapper = canvas.parentElement
+      expect(wrapper?.style.position).toBe('relative')
+    })
+  })
+
   describe('Cleanup', () => {
     it('should cleanup animation frame on unmount', () => {
       const { unmount } = render(<WaveformCanvas {...defaultProps} />)

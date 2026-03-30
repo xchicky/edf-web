@@ -449,7 +449,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   }, [waveformData, channelColors, amplitudeScale, windowDuration, selectionStart, selectionEnd, isSelecting, currentTime]);
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', width: '100%' }}>
       <canvas
       ref={canvasRef}
       onWheel={handleWheel}
