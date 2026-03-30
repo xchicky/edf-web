@@ -202,3 +202,12 @@ export async function analyzeComprehensive(
   return response.data;
 }
 
+/**
+ * Fetch demo EDF metadata with fixed file_id (dev-only)
+ * Uses a dedicated endpoint instead of uploading the file each time
+ */
+export async function fetchDemoMetadata(): Promise<EDFMetadata> {
+  const response = await axios.get(`${API_BASE()}/upload/dev/demo-metadata`);
+  return response.data;
+}
+

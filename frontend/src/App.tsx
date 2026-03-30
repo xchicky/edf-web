@@ -2,7 +2,7 @@
 import { useDropzone } from 'react-dropzone';
 import React, { useEffect, useCallback, useState } from 'react';
 import debounce from 'lodash.debounce';
-import { uploadEDF, getWaveform, calculateSignals } from './api/edf';
+import { uploadEDF, getWaveform, calculateSignals, fetchDemoMetadata } from './api/edf';
 import { useEDFStore } from './store/edfStore';
 import { useAnnotationStore } from './store/annotationStore';
 import { ChannelSelector } from './components/ChannelSelector';
@@ -120,19 +120,12 @@ function App() {
 
     const autoLoadDemo = async () => {
       try {
-        const response = await fetch('/edf/demo.edf');
-        if (!response.ok) return; // File not available, skip silently
+        // Fetch demo metadata with fixed file_id (no upload needed)
+        const result = await fetchDemoMetadata();
 
-        const blob = await response.blob();
-        const file = new File([blob], 'demo.edf', { type: 'application/octet-stream' });
-
-        // Reuse the same logic as dropzone onDrop
         reset();
-        setLoading(true);
-        setError(null);
-
-        const result = await uploadEDF(file);
         setMetadata(result as any);
+        setLoading(true);
 
         // Generate annotations in background (non-blocking)
         generateAnnotations(result.file_id).catch(() => {});

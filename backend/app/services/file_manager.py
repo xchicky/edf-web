@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 UPLOAD_DIR = Path(__name__).resolve().parent.parent / "storage" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+# Dev demo file path (project root edf/demo.edf)
+DEMO_EDF_PATH = Path(__file__).resolve().parent.parent.parent / "edf" / "demo.edf"
+
 # Maximum file size: 500MB
 MAX_UPLOAD_SIZE = 500 * 1024 * 1024
 
@@ -73,4 +76,9 @@ async def delete_file(file_path: str) -> bool:
 
 def get_file_path(file_id: str, extension: str = ".edf") -> str:
     """Get file path from file ID"""
+    # Dev demo: use fixed project file instead of uploaded copy
+    if file_id == "dev-demo":
+        if not DEMO_EDF_PATH.exists():
+            raise FileNotFoundError(f"Demo EDF file not found: {DEMO_EDF_PATH}")
+        return str(DEMO_EDF_PATH)
     return str(UPLOAD_DIR / f"{file_id}{extension}")
