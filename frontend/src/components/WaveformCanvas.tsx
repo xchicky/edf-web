@@ -43,8 +43,13 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   // 本地不再维护选择状态，确保与 store 同步
   // 跟踪鼠标按下位置，用于区分单击和拖拽
   const [mouseDownPos, setMouseDownPos] = React.useState<{x: number; y: number} | null>(null);
-  const [canvasSize, setCanvasSize] = React.useState({ width: 0, height: 0 });
-  const [containerWidth, setContainerWidth] = React.useState(0);
+  // Track canvas CSS size via ref to avoid re-renders that cause flash
+  const canvasSizeRef = React.useRef({ width: 0, height: 0 });
+  // Force re-render when size actually changes (for AnnotationLayer)
+  const [canvasSizeForOverlay, setCanvasSizeForOverlay] = React.useState({ width: 0, height: 0 });
+  const containerWidthRef = React.useRef(0);
+  // Track render epoch to know when containerWidth changed
+  const [renderTick, setRenderTick] = React.useState(0);
   const [cursorInfo, setCursorInfo] = React.useState<{
     visible: boolean;
     x: number;
@@ -235,11 +240,11 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     if (!parent) return;
 
     const updateSize = () => {
-      // Use requestAnimationFrame to ensure layout is settled before reading size
       requestAnimationFrame(() => {
         const width = canvas.clientWidth;
-        if (width > 0) {
-          setContainerWidth(prev => prev !== width ? width : prev);
+        if (width > 0 && width !== containerWidthRef.current) {
+          containerWidthRef.current = width;
+          setRenderTick((t) => t + 1);
         }
       });
     };
@@ -286,14 +291,23 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
 
     const pixelHeight = Math.round(cssHeight * dpr);
 
-    // Set canvas pixel buffer to device pixel dimensions
-    canvas.width = pixelWidth;
-    canvas.height = pixelHeight;
+    // Only reset canvas buffer if dimensions actually changed.
+    // Setting canvas.width/height clears the canvas, which causes the flash.
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+    }
 
     // Apply DPI scaling so all drawing uses CSS pixel coordinates
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    setCanvasSize({ width: cssWidth, height: cssHeight });
+    // Update canvas size ref (no setState - avoids re-render loop)
+    const prevSize = canvasSizeRef.current;
+    if (prevSize.width !== cssWidth || prevSize.height !== cssHeight) {
+      canvasSizeRef.current = { width: cssWidth, height: cssHeight };
+      // Only trigger overlay re-render if size actually changed
+      setCanvasSizeForOverlay({ width: cssWidth, height: cssHeight });
+    }
 
     // Report actual height to parent for AmplitudeAxis alignment
     onHeightChange?.(cssHeight);
@@ -446,7 +460,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         ctx.strokeRect(clampedStartX, 0, clampedEndX - clampedStartX, height);
       }
     }
-  }, [waveformData, channelColors, amplitudeScale, windowDuration, selectionStart, selectionEnd, isSelecting, hasSelection, currentTime, containerWidth, onHeightChange]);
+  }, [waveformData, channelColors, amplitudeScale, windowDuration, selectionStart, selectionEnd, isSelecting, hasSelection, currentTime, renderTick, onHeightChange]);
 
   return (
     <div style={{ position: 'relative', width: '100%' }}>
@@ -459,14 +473,14 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       onMouseLeave={handleMouseLeave}
       style={{ cursor: 'crosshair', width: '100%', display: 'block', boxSizing: 'border-box' }}
     />
-    {waveformData && canvasSize.width > 0 && (
+    {waveformData && canvasSizeForOverlay.width > 0 && (
       <AnnotationLayer
-        width={canvasSize.width}
-        height={canvasSize.height}
+        width={canvasSizeForOverlay.width}
+        height={canvasSizeForOverlay.height}
         currentTime={currentTime}
         windowDuration={windowDuration}
         channels={waveformData.channels}
-        channelHeight={canvasSize.height / waveformData.channels.length}
+        channelHeight={canvasSizeForOverlay.height / waveformData.channels.length}
         leftMargin={50}
       />
     )}
