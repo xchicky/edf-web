@@ -45,6 +45,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   // 跟踪鼠标按下位置，用于区分单击和拖拽
   const [mouseDownPos, setMouseDownPos] = React.useState<{x: number; y: number} | null>(null);
   const [canvasSize, setCanvasSize] = React.useState({ width: 0, height: 0 });
+  const [containerWidth, setContainerWidth] = React.useState(0);
   const [cursorInfo, setCursorInfo] = React.useState<{
     visible: boolean;
     x: number;
@@ -242,6 +243,27 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     }
   };
 
+  // Track container size with ResizeObserver for responsive canvas sizing
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    if (!parent) return;
+
+    const updateSize = () => {
+      const width = canvas.clientWidth;
+      if (width > 0) {
+        setContainerWidth(prev => prev !== width ? width : prev);
+      }
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(parent);
+    return () => observer.disconnect();
+  }, []);
+
   React.useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !waveformData) return;
@@ -249,27 +271,27 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const parentElement = canvas.parentElement;
-    if (!parentElement) return;
+    // Use CSS display width (canvas has width: 100% in CSS)
+    const width = canvas.clientWidth;
+    if (width <= 0) return;
 
-    const width = canvas.width = parentElement.clientWidth - 32;
+    // Match pixel buffer to CSS display width
+    canvas.width = width;
 
     // Calculate available height dynamically
-    // Get the waveform-display container (grandparent of canvas)
-    const waveformDisplay = parentElement.closest('.waveform-display');
+    const parentElement = canvas.parentElement;
+    const waveformDisplay = parentElement?.closest('.waveform-display');
     let height = 600; // Default fallback
 
     if (waveformDisplay) {
-      // Get available height in waveform-display
       const displayHeight = waveformDisplay.clientHeight;
-      // Subtract padding (16px top + 16px bottom)
       const availableHeight = displayHeight - 32;
-      // Subtract TimeAxis height (30px) and OverviewStrip height (120px) and margins
       const timeAxisHeight = 30;
       const overviewStripHeight = 120;
-      const margins = 8; // margin-top of overview-strip
+      const margins = 8;
+      const containerMargin = 32; // waveform-display-container margin: 16px * 2
 
-      height = Math.max(400, availableHeight - timeAxisHeight - overviewStripHeight - margins);
+      height = Math.max(400, availableHeight - timeAxisHeight - overviewStripHeight - margins - containerMargin);
     }
 
     canvas.height = height;
@@ -446,7 +468,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         animationFrameRef.current = null;
       }
     };
-  }, [waveformData, channelColors, amplitudeScale, windowDuration, selectionStart, selectionEnd, isSelecting, currentTime]);
+  }, [waveformData, channelColors, amplitudeScale, windowDuration, selectionStart, selectionEnd, isSelecting, currentTime, containerWidth]);
 
   return (
     <div style={{ position: 'relative', width: '100%' }}>
@@ -457,7 +479,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
-      style={{ cursor: 'crosshair' }}
+      style={{ cursor: 'crosshair', width: '100%', display: 'block', boxSizing: 'border-box' }}
     />
     {waveformData && canvasSize.width > 0 && (
       <AnnotationLayer

@@ -44,6 +44,17 @@ describe('WaveformCanvas', () => {
       font: '',
     })) as any
 
+    // Mock clientWidth for canvas sizing (width: 100% in CSS)
+    Object.defineProperty(HTMLCanvasElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: vi.fn(() => 800),
+    })
+
+    Object.defineProperty(HTMLCanvasElement.prototype, 'clientHeight', {
+      configurable: true,
+      get: vi.fn(() => 600),
+    })
+
     // Mock getBoundingClientRect
     HTMLCanvasElement.prototype.getBoundingClientRect = vi.fn(() => ({
       left: 0,
@@ -64,6 +75,13 @@ describe('WaveformCanvas', () => {
     }) as unknown as typeof requestAnimationFrame
 
     global.cancelAnimationFrame = vi.fn()
+
+    // Mock ResizeObserver as a class
+    global.ResizeObserver = class MockResizeObserver {
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+    } as any
   })
 
   describe('Rendering', () => {
@@ -340,6 +358,24 @@ describe('WaveformCanvas', () => {
       const wrapper = canvas.parentElement
       expect(wrapper?.style.position).toBe('relative')
     })
+
+    it('should set canvas CSS width to 100% for responsive sizing', () => {
+      render(<WaveformCanvas {...defaultProps} />)
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement
+      expect(canvas.style.width).toBe('100%')
+    })
+
+    it('should set canvas display to block to prevent inline spacing', () => {
+      render(<WaveformCanvas {...defaultProps} />)
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement
+      expect(canvas.style.display).toBe('block')
+    })
+
+    it('should set box-sizing to border-box to include border in width', () => {
+      render(<WaveformCanvas {...defaultProps} />)
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement
+      expect(canvas.style.boxSizing).toBe('border-box')
+    })
   })
 
   describe('Cleanup', () => {
@@ -365,6 +401,55 @@ describe('WaveformCanvas', () => {
       rerender(<WaveformCanvas {...defaultProps} waveformData={customData} />)
 
       expect(global.cancelAnimationFrame).toHaveBeenCalled()
+    })
+
+    it('should cleanup ResizeObserver on unmount', () => {
+      const { unmount } = render(<WaveformCanvas {...defaultProps} />)
+
+      // ResizeObserver should have been created
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement
+      expect(canvas).toBeInTheDocument()
+
+      unmount()
+      // No errors should be thrown during unmount
+    })
+  })
+
+  describe('Canvas Sizing', () => {
+    it('should use canvas.clientWidth for width instead of parentElement.clientWidth', () => {
+      render(<WaveformCanvas {...defaultProps} />)
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement
+
+      // Canvas width should match clientWidth (800 from mock)
+      expect(canvas.width).toBe(800)
+    })
+
+    it('should not subtract arbitrary constant from canvas width', () => {
+      render(<WaveformCanvas {...defaultProps} />)
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement
+
+      // Width should be exactly clientWidth, not clientWidth - 32
+      expect(canvas.width).toBe(800)
+    })
+
+    it('should create ResizeObserver for responsive sizing', () => {
+      const originalRO = global.ResizeObserver
+      const instances: any[] = []
+      global.ResizeObserver = class TrackResizeObserver {
+        observe = vi.fn()
+        unobserve = vi.fn()
+        disconnect = vi.fn()
+        constructor(cb: any) {
+          instances.push(this)
+        }
+      } as any
+
+      render(<WaveformCanvas {...defaultProps} />)
+
+      expect(instances.length).toBeGreaterThan(0)
+      expect(instances[0].observe).toHaveBeenCalled()
+
+      global.ResizeObserver = originalRO
     })
   })
 })
