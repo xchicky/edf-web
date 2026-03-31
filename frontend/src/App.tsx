@@ -152,11 +152,11 @@ function App() {
 
   // Use useLayoutEffect to calculate width BEFORE initial render
   // This ensures TimeAxis and WaveformCanvas have matching widths from the start
+  // Subtract 50px for the amplitude axis wrapper width
   React.useLayoutEffect(() => {
     const updateWidth = () => {
       if (waveformContainerRef.current) {
-        // Match WaveformCanvas calculation: parentElement.clientWidth - 32
-        const width = waveformContainerRef.current.clientWidth - 32;
+        const width = waveformContainerRef.current.clientWidth - 50;
         setCanvasWidth(width);
       }
     };
@@ -171,7 +171,7 @@ function App() {
   React.useEffect(() => {
     if (waveform) {
       if (waveformContainerRef.current) {
-        const width = waveformContainerRef.current.clientWidth - 32;
+        const width = waveformContainerRef.current.clientWidth - 50;
         setCanvasWidth(width);
       }
     }
@@ -182,7 +182,7 @@ function App() {
   React.useEffect(() => {
     const timer = setTimeout(() => {
       if (waveformContainerRef.current) {
-        const width = waveformContainerRef.current.clientWidth - 32;
+        const width = waveformContainerRef.current.clientWidth - 50;
         setCanvasWidth(width);
       }
     }, 350); // Wait slightly longer than the 300ms transition
