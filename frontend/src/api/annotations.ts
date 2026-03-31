@@ -12,7 +12,8 @@ export async function generateAnnotations(
     {
       run_band_analysis: true,
       run_anomaly_detection: true,
-    }
+    },
+    { timeout: 120000 }
   );
   return response.data;
 }

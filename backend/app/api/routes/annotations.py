@@ -5,6 +5,8 @@ Annotations API endpoint - EEG 标注系统
 """
 
 import asyncio
+import functools
+from concurrent.futures import ProcessPoolExecutor
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -17,6 +19,10 @@ from app.services.annotation_service import (
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Dedicated ProcessPoolExecutor for CPU-intensive annotation generation.
+# This bypasses the GIL so the uvicorn event loop stays responsive.
+_annotation_executor = ProcessPoolExecutor(max_workers=2)
 
 router = APIRouter()
 
@@ -148,12 +154,17 @@ async def generate_annotations(
             f"sensitivity={request.anomaly_sensitivity}"
         )
 
-        annotation_set = await asyncio.to_thread(
+        loop = asyncio.get_event_loop()
+        generate_fn = functools.partial(
             manager.generate_annotations,
             file_id=file_id,
             run_band_analysis=request.run_band_analysis,
             run_anomaly_detection=request.run_anomaly_detection,
             anomaly_sensitivity=request.anomaly_sensitivity,
+        )
+        annotation_set = await loop.run_in_executor(
+            _annotation_executor,
+            generate_fn,
         )
 
         return _annotation_set_to_response(annotation_set)
