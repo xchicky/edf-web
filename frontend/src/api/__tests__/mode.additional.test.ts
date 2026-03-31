@@ -21,6 +21,11 @@ import type { Mode } from '../../types/mode';
 vi.mock('axios');
 const mockedAxios = vi.mocked(axios);
 
+// Mock env to provide consistent API URL for assertions
+vi.mock('../../env', () => ({
+  getApiUrl: (path: string) => `http://localhost:8000/api${path}`,
+}));
+
 describe('Mode API - Additional Functions', () => {
   beforeEach(() => {
     vi.clearAllMocks();

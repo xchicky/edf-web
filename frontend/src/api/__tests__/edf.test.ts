@@ -66,6 +66,7 @@ describe('EDF API', () => {
         expect.any(FormData),
         {
           headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 120_000,
         }
       );
     });

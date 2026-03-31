@@ -31,7 +31,7 @@ function parseBoolean(value: string): boolean {
  * Validated environment configuration
  */
 export const env: EnvConfig = {
-  apiUrl: getEnvVar('VITE_API_BASE_URL', 'http://localhost:8000'),
+  apiUrl: getEnvVar('VITE_API_BASE_URL', ''),
   apiPath: getEnvVar('VITE_API_BASE_PATH', '/api'),
   appTitle: getEnvVar('VITE_APP_TITLE', 'EDF Viewer'),
   appVersion: getEnvVar('VITE_APP_VERSION', '2.0.0'),
