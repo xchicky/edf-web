@@ -2,7 +2,7 @@
 import { useDropzone } from 'react-dropzone';
 import React, { useEffect, useCallback, useState } from 'react';
 import debounce from 'lodash.debounce';
-import { uploadEDF, getWaveform, calculateSignals, fetchDemoMetadata } from './api/edf';
+import { uploadEDF, getWaveform, calculateSignals } from './api/edf';
 import { useEDFStore } from './store/edfStore';
 import { useAnnotationStore } from './store/annotationStore';
 import { ChannelSelector } from './components/ChannelSelector';
@@ -110,46 +110,6 @@ function App() {
   const [canvasWidth, setCanvasWidth] = React.useState(800);
   const [canvasHeight, setCanvasHeight] = React.useState(600);
 
-  // Dev-only: auto-load demo.edf for easier development testing
-  // TODO: Remove this block before production deployment
-  useEffect(() => {
-    // Skip in test environment to avoid fetch errors
-    if (import.meta.env.MODE === 'test') {
-      return;
-    }
-
-    const autoLoadDemo = async () => {
-      try {
-        // Fetch demo metadata with fixed file_id (no upload needed)
-        const result = await fetchDemoMetadata();
-
-        reset();
-        setMetadata(result as any);
-        setLoading(true);
-
-        // Generate annotations in background (non-blocking)
-        generateAnnotations(result.file_id).catch(() => {});
-
-        loadModes();
-        loadSignalsFromStorage(result.file_id);
-
-        const initialChannels = Array.from(
-          { length: Math.min(10, result.n_channels) },
-          (_, i) => i
-        );
-        const waveformData = await getWaveform(result.file_id, 0, windowDuration, initialChannels);
-        setWaveform(waveformData);
-      } catch (err) {
-        // Silently fail - this is a dev convenience feature
-        console.warn('Auto-load demo.edf failed:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    autoLoadDemo();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Use useLayoutEffect to calculate width BEFORE initial render
   // This ensures TimeAxis and WaveformCanvas have matching widths from the start
   // Subtract 50px for the amplitude axis wrapper width
@@ -193,7 +153,9 @@ function App() {
   const { getRootProps, getInputProps } = useDropzone({
     accept: { 'application/octet-stream': ['.edf'] },
     maxFiles: 1,
+    disabled: isLoading,
     onDrop: async (files) => {
+      if (!files || files.length === 0) return;
       reset();
       setLoading(true);
       setError(null);
