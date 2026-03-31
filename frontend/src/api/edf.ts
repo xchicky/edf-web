@@ -38,6 +38,7 @@ export async function uploadEDF(file: File): Promise<EDFMetadata> {
 
   const response = await axios.post(`${API_BASE()}/upload/`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120_000, // 120s for large EDF files
   });
 
   return response.data;
