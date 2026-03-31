@@ -42,6 +42,12 @@ describe('WaveformCanvas', () => {
       stroke: vi.fn(),
       fillText: vi.fn(),
       font: '',
+      setTransform: vi.fn(),
+      save: vi.fn(),
+      restore: vi.fn(),
+      scale: vi.fn(),
+      getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4) })),
+      putImageData: vi.fn(),
     })) as any
 
     // Mock clientWidth for canvas sizing (width: 100% in CSS)
@@ -382,9 +388,11 @@ describe('WaveformCanvas', () => {
     it('should cleanup animation frame on unmount', () => {
       const { unmount } = render(<WaveformCanvas {...defaultProps} />)
 
+      // Component now draws synchronously (no rAF), so unmount just needs to not throw
       unmount()
 
-      expect(global.cancelAnimationFrame).toHaveBeenCalled()
+      // Verify canvas is removed from DOM
+      expect(document.querySelector('canvas')).not.toBeInTheDocument()
     })
 
     it('should cleanup animation frame when waveformData changes', () => {
@@ -398,9 +406,10 @@ describe('WaveformCanvas', () => {
         n_samples: 3,
       }
 
-      rerender(<WaveformCanvas {...defaultProps} waveformData={customData} />)
-
-      expect(global.cancelAnimationFrame).toHaveBeenCalled()
+      // Should not throw when re-rendering with new data
+      expect(() => {
+        rerender(<WaveformCanvas {...defaultProps} waveformData={customData} />)
+      }).not.toThrow()
     })
 
     it('should cleanup ResizeObserver on unmount', () => {

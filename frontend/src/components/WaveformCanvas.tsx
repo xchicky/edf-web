@@ -39,7 +39,6 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
 }) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const gridCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
-  const animationFrameRef = React.useRef<number | null>(null);
   // 选择状态直接从 store 获取（通过 props 传入）
   // 本地不再维护选择状态，确保与 store 同步
   // 跟踪鼠标按下位置，用于区分单击和拖拽
@@ -88,9 +87,9 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         return;
       }
 
-      // 计算点击位置对应的时间
-      const canvasWidth = canvas.width;
-      const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
+      // 计算点击位置对应的时间 (use CSS pixels, not device pixels)
+      const cssWidth = rect.width;
+      const pixelsPerSecond = (cssWidth - 50) / windowDuration;
       const clickTime = currentTime + (x - 50) / pixelsPerSecond;
 
       // 直接更新store中的选择状态
@@ -108,43 +107,32 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // 从 props 获取选择状态（这些值来自 store）
     const isCurrentlySelecting = isSelecting;
 
     if (!isCurrentlySelecting && waveformData) {
-      // Show cursor crosshair and tooltip
       const rect = canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
 
       if (x > 50 && x < rect.width && y >= 0 && y < rect.height) {
-        // CRITICAL: Use canvas.width (device pixels) for accurate calculation
-        // rect.width can differ on high-DPI displays (devicePixelRatio)
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
+        // Use CSS pixel dimensions (mouse events are in CSS pixels)
+        const cssWidth = rect.width;
+        const cssHeight = rect.height;
 
-        // Convert mouse position from CSS pixels to canvas pixels
-        const scaleX = canvasWidth / rect.width;
-        const scaleY = canvasHeight / rect.height;
-        const canvasX = x * scaleX;
-        const canvasY = y * scaleY;
+        const pixelsPerSecond = (cssWidth - 50) / windowDuration;
+        const time = currentTime + (x - 50) / pixelsPerSecond;
 
-        const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
-        const time = currentTime + (canvasX - 50) / pixelsPerSecond;
-
-        const channelHeight = canvasHeight / waveformData.channels.length;
-        const channelIndex = Math.floor(canvasY / channelHeight);
+        const channelHeight = cssHeight / waveformData.channels.length;
+        const channelIndex = Math.floor(y / channelHeight);
 
         if (channelIndex >= 0 && channelIndex < waveformData.channels.length) {
           const channel = waveformData.channels[channelIndex];
           const yBase = channelIndex * channelHeight + channelHeight / 2;
-          // Inverse of drawing formula: y = yBase - (data[j] * channelHeight) / (200 * amplitudeScale)
-          // Therefore: data[j] = (yBase - y) * (200 * amplitudeScale) / channelHeight
-          const amplitude = (yBase - canvasY) * (200 * amplitudeScale) / channelHeight;
+          const amplitude = (yBase - y) * (200 * amplitudeScale) / channelHeight;
 
           setCursorInfo({
             visible: true,
-            x,  // Keep CSS pixels for cursor display position
+            x,
             y,
             time: formatTime(time),
             amplitude: `${amplitude.toFixed(1)} µV`,
@@ -154,20 +142,16 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       }
     }
 
-    // 如果在选择模式，更新选择的结束时间
     if (isCurrentlySelecting) {
       const rect = canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
 
-      // 计算时间
-      const canvasWidth = canvas.width;
-      const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
+      const cssWidth = rect.width;
+      const pixelsPerSecond = (cssWidth - 50) / windowDuration;
       const time = currentTime + (x - 50) / pixelsPerSecond;
 
-      // 保持时间在有效范围内
       const clampedTime = Math.max(0, Math.min(time, currentTime + windowDuration));
 
-      // 直接更新store中的选择状态
       const { setSelectionEnd } = useEDFStore.getState();
       setSelectionEnd(clampedTime);
     }
@@ -251,10 +235,13 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     if (!parent) return;
 
     const updateSize = () => {
-      const width = canvas.clientWidth;
-      if (width > 0) {
-        setContainerWidth(prev => prev !== width ? width : prev);
-      }
+      // Use requestAnimationFrame to ensure layout is settled before reading size
+      requestAnimationFrame(() => {
+        const width = canvas.clientWidth;
+        if (width > 0) {
+          setContainerWidth(prev => prev !== width ? width : prev);
+        }
+      });
     };
 
     updateSize();
@@ -264,6 +251,8 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     return () => observer.disconnect();
   }, []);
 
+  // Main rendering effect: draw grid, waveforms, and selection overlay
+  // Uses DPI-aware pixel buffer and synchronous drawing to avoid blank canvas
   React.useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !waveformData) return;
@@ -271,17 +260,18 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Use CSS display width (canvas has width: 100% in CSS)
-    const width = canvas.clientWidth;
-    if (width <= 0) return;
+    // Read CSS display width (canvas has width: 100% in CSS)
+    const cssWidth = canvas.clientWidth;
+    if (cssWidth <= 0) return;
 
-    // Match pixel buffer to CSS display width
-    canvas.width = width;
+    // DPI-aware pixel buffer: scale by devicePixelRatio for sharp rendering
+    const dpr = window.devicePixelRatio || 1;
+    const pixelWidth = Math.round(cssWidth * dpr);
 
-    // Calculate available height dynamically
+    // Calculate available height (CSS pixels)
     const parentElement = canvas.parentElement;
     const waveformDisplay = parentElement?.closest('.waveform-display');
-    let height = 600; // Default fallback
+    let cssHeight = 600; // Default fallback
 
     if (waveformDisplay) {
       const displayHeight = waveformDisplay.clientHeight;
@@ -291,41 +281,51 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       const margins = 8;
       const containerMargin = 32; // waveform-display-container margin: 16px * 2
 
-      height = Math.max(400, availableHeight - timeAxisHeight - overviewStripHeight - margins - containerMargin);
+      cssHeight = Math.max(400, availableHeight - timeAxisHeight - overviewStripHeight - margins - containerMargin);
     }
 
-    canvas.height = height;
-    setCanvasSize({ width, height });
+    const pixelHeight = Math.round(cssHeight * dpr);
+
+    // Set canvas pixel buffer to device pixel dimensions
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+
+    // Apply DPI scaling so all drawing uses CSS pixel coordinates
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    setCanvasSize({ width: cssWidth, height: cssHeight });
 
     // Report actual height to parent for AmplitudeAxis alignment
-    onHeightChange?.(height);
+    onHeightChange?.(cssHeight);
 
-    // Pre-render grid to offscreen canvas
-    // Invalidate grid cache when width, height, windowDuration, OR channel count changes
+    // Use CSS pixel dimensions for all coordinate calculations
+    const width = cssWidth;
+    const height = cssHeight;
+
+    // Pre-render grid to offscreen canvas (cached for performance)
     const numChannels = waveformData.channels.length;
-    if (!gridCanvasRef.current ||
-        gridCanvasRef.current.width !== width ||
-        gridCanvasRef.current.height !== height ||
-        gridCanvasRef.current.dataset.windowDuration !== windowDuration.toString() ||
-        gridCanvasRef.current.dataset.numChannels !== numChannels.toString()) {
+    const gridCacheKey = `${pixelWidth}-${pixelHeight}-${windowDuration}-${numChannels}`;
+
+    if (!gridCanvasRef.current || gridCanvasRef.current.dataset.cacheKey !== gridCacheKey) {
       const gridCanvas = document.createElement('canvas');
-      gridCanvas.width = width;
-      gridCanvas.height = height;
-      gridCanvas.dataset.windowDuration = windowDuration.toString(); // Store for cache comparison
-      gridCanvas.dataset.numChannels = numChannels.toString(); // Store channel count for cache comparison
+      gridCanvas.width = pixelWidth;
+      gridCanvas.height = pixelHeight;
+      gridCanvas.dataset.cacheKey = gridCacheKey;
       gridCanvasRef.current = gridCanvas;
 
       const gridCtx = gridCanvas.getContext('2d');
       if (!gridCtx) return;
 
-      // Draw grid on offscreen canvas
-      gridCtx.strokeStyle = '#DEE2E6';
-      gridCtx.lineWidth = 1;
+      // Scale grid context for DPI
+      gridCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+      // Draw grid on offscreen canvas (all coordinates in CSS pixels)
       // Vertical grid lines (time) - 1 second intervals
       const timeStep = (width - 50) / windowDuration;
       for (let t = 0; t <= windowDuration; t += 1) {
         const x = 50 + t * timeStep;
+        gridCtx.strokeStyle = '#DEE2E6';
+        gridCtx.lineWidth = 1;
         gridCtx.beginPath();
         gridCtx.moveTo(x, 0);
         gridCtx.lineTo(x, height);
@@ -337,8 +337,8 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
 
       // Amplitude range: -100 to 100 µV
       const voltageRange = 200; // -100 to 100
-      const mainTickInterval = 50; // Main ticks every 50µV (5 ticks per channel)
-      const minorTickInterval = 10; // Minor ticks every 10µV (5x finer)
+      const mainTickInterval = 50; // Main ticks every 50µV
+      const minorTickInterval = 10; // Minor ticks every 10µV
 
       for (let ch = 0; ch < numChannels; ch++) {
         const channelTop = ch * channelHeight;
@@ -378,97 +378,75 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       }
     }
 
-    // Render with requestAnimationFrame for smooth updates
-    const render = () => {
-      if (!canvas || !gridCanvasRef.current) return;
+    // === Draw everything synchronously (no requestAnimationFrame) ===
+    // This avoids the rAF being cancelled by React's effect cleanup
 
-      // Clear and set background
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, width, height);
+    // Clear and set background (CSS pixel coordinates, scaled by DPI transform)
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, width, height);
 
-      // Draw pre-rendered grid
-      ctx.drawImage(gridCanvasRef.current, 0, 0);
+    // Draw pre-rendered grid (pixel-to-pixel copy, bypass DPI transform)
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(gridCanvasRef.current, 0, 0);
+    ctx.restore();
 
-      // Draw waveforms
-      const numChannels = waveformData.channels.length;
-      const channelHeight = height / numChannels;
+    // Draw waveforms (CSS pixel coordinates, scaled by DPI transform)
+    const channelHeight = height / numChannels;
 
-      waveformData.channels.forEach((channelData, i) => {
-        const yBase = i * channelHeight + channelHeight / 2;
-        const color = channelColors[i % channelColors.length];
+    waveformData.channels.forEach((channelData, i) => {
+      const yBase = i * channelHeight + channelHeight / 2;
+      const color = channelColors[i % channelColors.length];
 
-        // Draw waveform with path simplification at high density
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
+      // Draw waveform with path simplification at high density
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
 
-        const data = waveformData.data[i];
-        const times = waveformData.times;
+      const data = waveformData.data[i];
+      const times = waveformData.times;
 
-        // Simplify path if data points > 2x pixels
-        const pixelDensity = data.length / width;
-        const step = pixelDensity > 2 ? Math.ceil(pixelDensity / 2) : 1;
+      // Simplify path if data points > 2x pixels
+      const pixelDensity = data.length / width;
+      const step = pixelDensity > 2 ? Math.ceil(pixelDensity / 2) : 1;
 
-        for (let j = 0; j < data.length; j += step) {
-          const x = 50 + ((times[j] - waveformData.times[0]) / waveformData.duration) * (width - 50);
-          // Map voltage to pixel position: voltage range [-100, 100] maps to channel height
-          const y = yBase - (data[j] * channelHeight) / (200 * amplitudeScale);
-          if (j === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        }
-
-        ctx.stroke();
-
-        // Draw channel label
-        ctx.fillStyle = '#212529';
-        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-        ctx.fillText(channelData, 5, yBase + 4);
-      });
-
-      // 绘制选择区域
-      // 使用props传入的选择状态
-      // 在选择中或有已确认选择时都渲染选择框
-      if ((isSelecting || hasSelection) && selectionStart !== null && selectionEnd !== null) {
-        // 计算选择区域的像素位置
-        const startX = 50 + ((selectionStart - currentTime) / windowDuration) * (width - 50);
-        const endX = 50 + ((selectionEnd - currentTime) / windowDuration) * (width - 50);
-
-        // 确保选择区域在有效范围内
-        const clampedStartX = Math.max(50, Math.min(startX, width));
-        const clampedEndX = Math.max(50, Math.min(endX, width));
-
-        if (clampedStartX < clampedEndX) {
-          // 绘制选择区域
-          ctx.fillStyle = 'rgba(33, 150, 243, 0.2)'; // 半透明蓝色
-          ctx.fillRect(clampedStartX, 0, clampedEndX - clampedStartX, height);
-
-          // 绘制选择边框
-          ctx.strokeStyle = '#2196F3'; // 深蓝色边框
-          ctx.lineWidth = 1;
-          ctx.strokeRect(clampedStartX, 0, clampedEndX - clampedStartX, height);
+      for (let j = 0; j < data.length; j += step) {
+        const x = 50 + ((times[j] - waveformData.times[0]) / waveformData.duration) * (width - 50);
+        // Map voltage to pixel position: voltage range [-100, 100] maps to channel height
+        const y = yBase - (data[j] * channelHeight) / (200 * amplitudeScale);
+        if (j === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
         }
       }
-    };
 
-    // Cancel previous animation frame
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
+      ctx.stroke();
+
+      // Draw channel label
+      ctx.fillStyle = '#212529';
+      ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillText(channelData, 5, yBase + 4);
+    });
+
+    // Draw selection area
+    if ((isSelecting || hasSelection) && selectionStart !== null && selectionEnd !== null) {
+      const startX = 50 + ((selectionStart - currentTime) / windowDuration) * (width - 50);
+      const endX = 50 + ((selectionEnd - currentTime) / windowDuration) * (width - 50);
+
+      const clampedStartX = Math.max(50, Math.min(startX, width));
+      const clampedEndX = Math.max(50, Math.min(endX, width));
+
+      if (clampedStartX < clampedEndX) {
+        ctx.fillStyle = 'rgba(33, 150, 243, 0.2)';
+        ctx.fillRect(clampedStartX, 0, clampedEndX - clampedStartX, height);
+
+        ctx.strokeStyle = '#2196F3';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(clampedStartX, 0, clampedEndX - clampedStartX, height);
+      }
     }
-
-    // Schedule new render
-    animationFrameRef.current = requestAnimationFrame(render);
-
-    // Cleanup
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-    };
-  }, [waveformData, channelColors, amplitudeScale, windowDuration, selectionStart, selectionEnd, isSelecting, currentTime, containerWidth]);
+  }, [waveformData, channelColors, amplitudeScale, windowDuration, selectionStart, selectionEnd, isSelecting, hasSelection, currentTime, containerWidth, onHeightChange]);
 
   return (
     <div style={{ position: 'relative', width: '100%' }}>
