@@ -40,12 +40,10 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const gridCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = React.useRef<number | null>(null);
-  // 选择状态直接从 store 获取（通过 props 传入）
-  // 本地不再维护选择状态，确保与 store 同步
   // 跟踪鼠标按下位置，用于区分单击和拖拽
   const [mouseDownPos, setMouseDownPos] = React.useState<{x: number; y: number} | null>(null);
   const [canvasSize, setCanvasSize] = React.useState({ width: 0, height: 0 });
-  const [containerWidth, setContainerWidth] = React.useState(0);
+  const [cssWidth, setCssWidth] = React.useState(0);
   const [cursorInfo, setCursorInfo] = React.useState<{
     visible: boolean;
     x: number;
@@ -88,9 +86,8 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         return;
       }
 
-      // 计算点击位置对应的时间
-      const canvasWidth = canvas.width;
-      const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
+      // 计算点击位置对应的时间 (use CSS pixel coordinates)
+      const pixelsPerSecond = (rect.width - 50) / windowDuration;
       const clickTime = currentTime + (x - 50) / pixelsPerSecond;
 
       // 直接更新store中的选择状态
@@ -118,33 +115,21 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       const y = event.clientY - rect.top;
 
       if (x > 50 && x < rect.width && y >= 0 && y < rect.height) {
-        // CRITICAL: Use canvas.width (device pixels) for accurate calculation
-        // rect.width can differ on high-DPI displays (devicePixelRatio)
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
+        // Use CSS pixel coordinates directly (canvas context has DPR transform)
+        const pixelsPerSecond = (rect.width - 50) / windowDuration;
+        const time = currentTime + (x - 50) / pixelsPerSecond;
 
-        // Convert mouse position from CSS pixels to canvas pixels
-        const scaleX = canvasWidth / rect.width;
-        const scaleY = canvasHeight / rect.height;
-        const canvasX = x * scaleX;
-        const canvasY = y * scaleY;
-
-        const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
-        const time = currentTime + (canvasX - 50) / pixelsPerSecond;
-
-        const channelHeight = canvasHeight / waveformData.channels.length;
-        const channelIndex = Math.floor(canvasY / channelHeight);
+        const channelHeight = rect.height / waveformData.channels.length;
+        const channelIndex = Math.floor(y / channelHeight);
 
         if (channelIndex >= 0 && channelIndex < waveformData.channels.length) {
           const channel = waveformData.channels[channelIndex];
           const yBase = channelIndex * channelHeight + channelHeight / 2;
-          // Inverse of drawing formula: y = yBase - (data[j] * channelHeight) / (200 * amplitudeScale)
-          // Therefore: data[j] = (yBase - y) * (200 * amplitudeScale) / channelHeight
-          const amplitude = (yBase - canvasY) * (200 * amplitudeScale) / channelHeight;
+          const amplitude = (yBase - y) * (200 * amplitudeScale) / channelHeight;
 
           setCursorInfo({
             visible: true,
-            x,  // Keep CSS pixels for cursor display position
+            x,  // CSS pixels for cursor display position
             y,
             time: formatTime(time),
             amplitude: `${amplitude.toFixed(1)} µV`,
@@ -159,9 +144,8 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       const rect = canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
 
-      // 计算时间
-      const canvasWidth = canvas.width;
-      const pixelsPerSecond = (canvasWidth - 50) / windowDuration;
+      // 计算时间 (use CSS pixel coordinates)
+      const pixelsPerSecond = (rect.width - 50) / windowDuration;
       const time = currentTime + (x - 50) / pixelsPerSecond;
 
       // 保持时间在有效范围内
@@ -212,13 +196,13 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
 
   const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
     event.preventDefault();
-    
+
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     const rect = canvas.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
-    
+
     // Determine zoom axis based on mouse position
     // Left 50px = amplitude zoom, rest = time zoom
     if (mouseX < 50) {
@@ -233,37 +217,37 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       if (onTimeChange) {
         const zoomFactor = event.deltaY > 0 ? 1.1 : 0.9;
         const mouseTimeRatio = mouseX / (rect.width - 50);
-        
+
         const newDuration = Math.max(1, Math.min(60, windowDuration * zoomFactor));
         const timeAdjustment = (windowDuration - newDuration) * mouseTimeRatio;
         const newTime = Math.max(0, currentTime + timeAdjustment);
-        
+
         onTimeChange(newTime);
       }
     }
   };
 
-  // Track container size with ResizeObserver for responsive canvas sizing
+  // Track canvas size with ResizeObserver for responsive canvas sizing
   React.useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const parent = canvas.parentElement;
-    if (!parent) return;
 
     const updateSize = () => {
       const width = canvas.clientWidth;
       if (width > 0) {
-        setContainerWidth(prev => prev !== width ? width : prev);
+        setCssWidth(prev => prev !== width ? width : prev);
       }
     };
 
     updateSize();
 
+    // Observe the canvas itself, not the parent
     const observer = new ResizeObserver(updateSize);
-    observer.observe(parent);
+    observer.observe(canvas);
     return () => observer.disconnect();
   }, []);
 
+  // Main rendering effect with high-DPI support
   React.useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !waveformData) return;
@@ -271,17 +255,15 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Use CSS display width (canvas has width: 100% in CSS)
-    const width = canvas.clientWidth;
-    if (width <= 0) return;
+    // Get CSS display dimensions
+    const cw = canvas.clientWidth;
+    if (cw <= 0) return;
 
-    // Match pixel buffer to CSS display width
-    canvas.width = width;
+    const dpr = window.devicePixelRatio || 1;
 
-    // Calculate available height dynamically
-    const parentElement = canvas.parentElement;
-    const waveformDisplay = parentElement?.closest('.waveform-display');
-    let height = 600; // Default fallback
+    // Calculate CSS height dynamically
+    const waveformDisplay = canvas.closest('.waveform-display');
+    let ch = 600; // Default fallback
 
     if (waveformDisplay) {
       const displayHeight = waveformDisplay.clientHeight;
@@ -291,32 +273,56 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       const margins = 8;
       const containerMargin = 32; // waveform-display-container margin: 16px * 2
 
-      height = Math.max(400, availableHeight - timeAxisHeight - overviewStripHeight - margins - containerMargin);
+      ch = Math.max(400, availableHeight - timeAxisHeight - overviewStripHeight - margins - containerMargin);
     }
 
-    canvas.height = height;
-    setCanvasSize({ width, height });
+    // Set canvas pixel buffer to match device pixels
+    canvas.width = Math.round(cw * dpr);
+    canvas.height = Math.round(ch * dpr);
+
+    // Scale context so all drawing uses CSS pixel coordinates
+    // Guard for test environments (jsdom) where setTransform is not available
+    if (typeof ctx.setTransform === 'function') {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    } else if (typeof ctx.scale === 'function') {
+      ctx.scale(dpr, dpr);
+    }
+
+    setCanvasSize({ width: cw, height: ch });
 
     // Report actual height to parent for AmplitudeAxis alignment
-    onHeightChange?.(height);
+    onHeightChange?.(ch);
+
+    // All coordinates below are in CSS pixels
+    const width = cw;
+    const height = ch;
 
     // Pre-render grid to offscreen canvas
-    // Invalidate grid cache when width, height, windowDuration, OR channel count changes
     const numChannels = waveformData.channels.length;
+    const gridWidth = Math.round(width * dpr);
+    const gridHeight = Math.round(height * dpr);
+
     if (!gridCanvasRef.current ||
-        gridCanvasRef.current.width !== width ||
-        gridCanvasRef.current.height !== height ||
+        gridCanvasRef.current.width !== gridWidth ||
+        gridCanvasRef.current.height !== gridHeight ||
         gridCanvasRef.current.dataset.windowDuration !== windowDuration.toString() ||
         gridCanvasRef.current.dataset.numChannels !== numChannels.toString()) {
       const gridCanvas = document.createElement('canvas');
-      gridCanvas.width = width;
-      gridCanvas.height = height;
-      gridCanvas.dataset.windowDuration = windowDuration.toString(); // Store for cache comparison
-      gridCanvas.dataset.numChannels = numChannels.toString(); // Store channel count for cache comparison
+      gridCanvas.width = gridWidth;
+      gridCanvas.height = gridHeight;
+      gridCanvas.dataset.windowDuration = windowDuration.toString();
+      gridCanvas.dataset.numChannels = numChannels.toString();
       gridCanvasRef.current = gridCanvas;
 
       const gridCtx = gridCanvas.getContext('2d');
       if (!gridCtx) return;
+
+      // Scale grid context for CSS pixel coordinates
+      if (typeof gridCtx.setTransform === 'function') {
+        gridCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      } else if (typeof gridCtx.scale === 'function') {
+        gridCtx.scale(dpr, dpr);
+      }
 
       // Draw grid on offscreen canvas
       gridCtx.strokeStyle = '#DEE2E6';
@@ -382,15 +388,14 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     const render = () => {
       if (!canvas || !gridCanvasRef.current) return;
 
-      // Clear and set background
+      // Clear and set background (CSS pixel coordinates)
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, width, height);
 
-      // Draw pre-rendered grid
-      ctx.drawImage(gridCanvasRef.current, 0, 0);
+      // Draw pre-rendered grid (source: device pixels, dest: CSS pixels)
+      ctx.drawImage(gridCanvasRef.current, 0, 0, width, height);
 
       // Draw waveforms
-      const numChannels = waveformData.channels.length;
       const channelHeight = height / numChannels;
 
       waveformData.channels.forEach((channelData, i) => {
@@ -429,8 +434,6 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       });
 
       // 绘制选择区域
-      // 使用props传入的选择状态
-      // 在选择中或有已确认选择时都渲染选择框
       if ((isSelecting || hasSelection) && selectionStart !== null && selectionEnd !== null) {
         // 计算选择区域的像素位置
         const startX = 50 + ((selectionStart - currentTime) / windowDuration) * (width - 50);
@@ -468,7 +471,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         animationFrameRef.current = null;
       }
     };
-  }, [waveformData, channelColors, amplitudeScale, windowDuration, selectionStart, selectionEnd, isSelecting, currentTime, containerWidth]);
+  }, [waveformData, channelColors, amplitudeScale, windowDuration, selectionStart, selectionEnd, isSelecting, currentTime, cssWidth]);
 
   return (
     <div style={{ position: 'relative', width: '100%' }}>
