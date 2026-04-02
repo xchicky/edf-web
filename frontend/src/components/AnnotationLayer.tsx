@@ -157,6 +157,9 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
         left: 0,
         width,
         height,
+        background: "transparent",
+        border: "none",
+        borderRadius: 0,
         pointerEvents: onAnnotationClick ? "auto" : "none",
       }}
     />

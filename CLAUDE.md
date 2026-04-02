@@ -16,12 +16,13 @@ EEG/脑电图数据可视化 Web 应用，支持 EDF/EDF+ 文件格式。前后�
 
 ### 前端 (frontend/)
 ```bash
-npm run dev              # 启动开发服务器 (http://localhost:5173)
+npm run dev              # 启动开发服务器 (http://localhost:5173, proxy → :8000)
 npm run build            # TypeScript 编译 + Vite 构建
 npm run test             # 运行 Vitest 单元测试
 npm run test:coverage    # 生成测试覆盖率报告 (要求 80%)
 npm run lint             # ESLint 代码检查
-npm run preview          # 预览生产构建
+npm run test:e2e         # Playwright E2E 测试
+npm run test:e2e:headed  # Playwright E2E (有头模式)
 ```
 
 ### 后端 (backend/)
@@ -80,36 +81,22 @@ EDF 文件存储 (backend/storage/)
   - **信号数据** (signalData) - 计算结果缓存
   - **加载状态** (isLoadingSignals) - 信号计算进度
 
-**核心组件** (25个组件):
-- `App.tsx` - 主应用容器 (21KB，核心逻辑)
+**核心组件**: 所有组件位于 `frontend/src/components/`，约 27 个。关键组件：
+- `App.tsx` - 主应用容器 (核心逻辑)
 - `WaveformCanvas.tsx` - 波形画布 (Canvas 渲染，核心可视化组件)
-- `OverviewStrip.tsx` - 概览条 (显示完整时间范围)
-- `TimeAxis.tsx` - 时间轴
-- `AmplitudeAxis.tsx` - 振幅轴
-- `ChannelSelector.tsx` - 通道选择器
-- `TimeToolbar.tsx` - 时间控制工具栏
-- `CursorOverlay.tsx` - 光标覆盖层
-- `TimeScrubber.tsx` - 时间滑块
-- `ZoomIndicator.tsx` - 缩放指示器
-- `ResolutionIndicator.tsx` - 分辨率指示器
-- `InteractionHint.tsx` - 交互提示
-- `KeyboardShortcuts.tsx` - 键盘快捷键
-- **`SignalEditor.tsx`** - 信号编辑器 (创建/编辑派生信号)
-- **`SignalList.tsx`** - 信号列表 (管理所有派生信号)
-- **`SignalExpressionBuilder.tsx`** - 表达式构建器 (可视化表达式编辑)
-- **`SelectionInfo.tsx`** - 选区统计信息 (最小值/最大值/平均值/范围)
-- **`StatsView.tsx`** - 时域分析统计 (均值/标准差/RMS/峰度/偏度)
-- **`FrequencyView.tsx`** - 频带功率分析 (Delta/Theta/Alpha/Beta/Gamma)
-- **`ModeEditor.tsx`** - 模式编辑器 (创建/编辑自定义分析模式)
-- **`ModeSelector.tsx`** - 模式选择器 (智能推荐和兼容性检查)
-- **`ModeCard.tsx`** - 模式卡片 (显示模式信息)
-- **`CompatibilityWarning.tsx`** - 兼容性警告 (显示模式兼容性问题)
-- **`PreprocessSelector.tsx`** - 预处理方法选择器 (去漂移/滤波)
-- **`AdvancedAnalysisModal.tsx`** - 高级分析模态框 (原始与预处理信号对比)
+- `SignalEditor.tsx` / `SignalList.tsx` / `SignalExpressionBuilder.tsx` - 派生信号系统
+- `ModeEditor.tsx` / `ModeSelector.tsx` / `ModeCard.tsx` / `CompatibilityWarning.tsx` - 模式管理
+- `SelectionInfo.tsx` / `StatsView.tsx` / `FrequencyView.tsx` - 数据分析面板
+- `AnnotationLayer.tsx` / `AnnotationPanel.tsx` - 标注系统 (伪迹/异常标注展示与管理)
+- `PreprocessSelector.tsx` / `AdvancedAnalysisModal.tsx` - 预处理与高级分析
 
 **API 客户端**:
-- `frontend/src/api/edf.ts` - 封装 EDF 相关 API 调用 (文件上传、元数据、波形、信号管理、分析)
-- `frontend/src/api/mode.ts` - 封装模式管理 API 调用 (CRUD、兼容性检查、推荐)
+- `frontend/src/api/edf.ts` - EDF 相关 API (上传、元数据、波形、信号、分析)
+- `frontend/src/api/mode.ts` - 模式管理 API (CRUD、兼容性检查、推荐)
+- `frontend/src/api/annotations.ts` - 标注 API (生成、查询、用户标注 CRUD)
+
+**类型定义** (`frontend/src/types/`):
+- `signal.ts`, `analysis.ts`, `mode.ts`, `annotation.ts`
 
 ### 后端架构
 
@@ -128,18 +115,24 @@ MNE-Python Library (EDF 解析)
 - `waveform.py` - 波形数据获取
 - `waveform_overview.py` - 概览数据
 - `health.py` - 健康检查
-- **`signals.py`** - 信号管理 (验证、计算派生信号)
-- **`analysis.py`** - 数据分析 (时域分析/频带功率/功率谱密度)
-- **`modes.py`** - 模式管理 (CRUD、兼容性检查、推荐、导入导出)
+- `signals.py` - 信号管理 (验证、计算派生信号)
+- `analysis.py` - 数据分析 (时域分析/频带功率/功率谱密度)
+- `modes.py` - 模式管理 (CRUD、兼容性检查、推荐、导入导出)
+- `band_analysis.py` - 频段波形识别分析 (频段分解、优势频段识别、时间分段)
+- `anomaly_detection.py` - 异常波形检测 (棘波/尖波/棘慢复合波/慢波/节律异常)
+- `annotations.py` - 标注系统 (统一标注格式、生成/查询/用户标注管理)
 
 **业务逻辑** (`backend/app/services/`):
 - `edf_parser.py` - EDF 文件解析 (使用 MNE-Python)
 - `file_manager.py` - 文件管理
-- **`signal_calculator.py`** - 信号计算引擎 (表达式求值、数据处理)
-- **`analysis_service.py`** - 分析服务 (时域/频域/综合分析)
-- **`mode_service.py`** - 模式管理服务 (模式存储、兼容性检查、推荐系统)
-- **`preprocessing.py`** - 信号预处理 (去漂移、高通滤波、基线校正)
-- **`auto_preprocess.py`** - 自动预处理流水线 (重参考、Notch滤波、伪迹检测)
+- `signal_calculator.py` - 信号计算引擎 (表达式求值、数据处理)
+- `analysis_service.py` - 分析服务 (时域/频域/综合分析)
+- `mode_service.py` - 模式管理服务 (模式存储、兼容性检查、推荐系统)
+- `preprocessing.py` - 信号预处理 (去漂移、高通滤波、基线校正)
+- `auto_preprocess.py` - 自动预处理流水线 (重参考、Notch滤波、伪迹检测)
+- `band_analyzer.py` - 频段分析器 (频段分解、特征提取)
+- `anomaly_detector.py` - 异常检测器 (棘波/尖波等异常波形检测)
+- `annotation_service.py` - 标注服务 (统一标注格式转换、缓存管理)
 
 **API 端点**:
 ```
@@ -206,6 +199,21 @@ GET  /api/modes/{mode_id}/export      # 导出模式 (JSON)
 POST /api/modes/import                # 导入模式
 POST /api/modes/{mode_id}/apply       # 应用模式到文件
 POST /api/modes/{mode_id}/reset       # 重置模式为默认配置
+
+# 频段分析端点
+POST /api/band_analysis/{file_id}     # 频段波形识别分析
+     Body: {start, duration, channels?, epoch_duration?, include_gamma?}
+
+# 异常检测端点
+POST /api/anomaly_detection/{file_id} # 异常波形检测
+     Body: {start, duration, channels?, sensitivity?, run_preprocess?}
+
+# 标注系统端点
+POST /api/annotations/{file_id}/generate  # 触发完整分析生成标注
+GET  /api/annotations/{file_id}           # 获取标注 (支持时间/类型/通道过滤)
+POST /api/annotations/{file_id}/user      # 添加用户手动标注
+DELETE /api/annotations/{file_id}/user/{id}  # 删除用户标注
+DELETE /api/annotations/{file_id}/cache   # 清除文件标注缓存
 ```
 
 ## 关键技术特性
@@ -277,60 +285,78 @@ np.abs(Fp1 - F3)      # 绝对值
 - 自定义模式: `backend/storage/modes/custom_modes.json`
 - 使用统计: `backend/storage/modes/usage_stats.json`
 
-### 5. 内存优化 (关键)
+### 5. 标注系统 (Annotation System)
+
+将伪迹检测、频段分析、异常检测的结果统一转换为标准化的 Annotation 格式。
+
+**标注类型**:
+- 伪迹标注: EOG 眼电、EMG 肌电、平坦信号、信号漂移、信号跳变
+- 频段标注: 优势频段
+- 异常标注: 棘波、尖波、棘慢复合波、慢波异常、节律异常
+
+**标注生成流程**: `POST /api/annotations/{file_id}/generate` → 预处理流水线 → 伪迹检测 → 频段分析 → 异常检测 → 统一 Annotation 格式
+
+**前端组件**: `AnnotationLayer.tsx` (波形上的标注叠加层), `AnnotationPanel.tsx` (标注列表面板)
+
+**关键实现**: 标注生成使用 `ProcessPoolExecutor` 避免 GIL 阻塞 uvicorn 事件循环
+
+### 6. 内存优化 (关键)
 
 176MB EDF 文件完整加载需要 ~240MB RAM。优化方案：
 ```python
-# edf_parser.py 中的实现
 raw = mne.io.read_raw_edf(file_path, preload=False, encoding='latin1')
 raw.crop(tmin=start_time, tmax=end_time)  # 只加载时间段
 raw.pick_channels(selected_channels)      # 只选择通道
 raw.load_data()                           # 现在才加载
 ```
 
-**内存对比**: 完整 ~240MB → 10秒数据 ~12MB (↓95%) → 10通道×10秒 ~2MB (↓99%)
-
-### 6. 中文文件名支持
+### 7. 中文文件名支持
 
 必须使用 `encoding='latin1'` 参数读取 EDF 文件。前端 UTF-8 无需特殊处理。
 
-### 7. Canvas 渲染
+### 8. Canvas 渲染
 
 `WaveformCanvas.tsx` 使用原生 Canvas API。注意坐标系统对齐 (X 轴宽度必须与 TimeAxis 一致)。
-已修复: 0.5 电压缩放因子 (a16c40c)、X 轴对齐 (52070a1)、网格线可见性 (42d4813)
 
-### 8. 测试覆盖率
+### 9. 测试覆盖率
 
 **前端 (Vitest)**:
-- 测试文件: 13 个
-- 测试用例: 301 个
-- 覆盖率: 语句 84.77%, 分支 75.69%, 函数 85.25%, 行 85.87%
 - 测试框架: Vitest + Testing Library (jsdom, v8 coverage)
+- 覆盖率要求: 80%
 
 **后端 (Pytest)**:
-- 测试框架: Pytest + httpx
+- 测试框架: Pytest + httpx (使用 `TestClient`)
+- 测试夹具: `client` (FastAPI TestClient), `sample_metadata`
 - 覆盖率要求: 80%
 - 异步模式: asyncio: auto
+- 自定义标记: `@pytest.mark.visualize` (需要 matplotlib)
 
 **测试文件结构**:
 ```
 frontend/src/
-├── api/__tests__/
-│   └── edf.test.ts (22 tests) - API 调用层测试
-├── components/__tests__/
-│   ├── WaveformCanvas.test.tsx (22 tests)
-│   ├── WaveformCanvas.coordinate-verification.test.tsx (9 tests)
-│   ├── SignalEditor.test.tsx (22 tests)
-│   ├── SignalList.test.tsx (21 tests)
-│   ├── SignalExpressionBuilder.test.tsx (26 tests)
-│   ├── OverviewStrip.test.tsx (16 tests)
-│   └── ChannelSelector.test.tsx (30 tests)
-├── store/__tests__/
-│   └── edfStore.test.ts (51 tests) - Zustand store 状态管理测试
-└── utils/__tests__/
-    ├── signalStorage.test.ts (24 tests) - localStorage 操作测试
-    ├── expressionParser.test.ts (35 tests) - 表达式解析测试
-    └── statsCalculator.test.ts (21 tests) - 统计计算测试
+├── api/__tests__/          # API 调用层测试 (edf, mode, annotations)
+├── components/__tests__/   # 组件测试 (含坐标系统验证)
+├── store/__tests__/        # Zustand store 测试
+├── types/__tests__/        # 类型测试 (mode, annotation)
+└── utils/__tests__/        # 工具函数测试
+
+backend/tests/
+├── conftest.py             # 测试夹具 (client, sample_metadata)
+├── test_health.py          # 健康检查
+├── test_signals_api.py     # 信号 API
+├── test_signal_calculator.py # 信号计算
+├── test_analysis_api.py    # 分析 API
+├── test_analysis_service.py # 分析服务
+├── test_modes_api.py       # 模式管理 API
+├── test_band_analyzer.py   # 频段分析器
+├── test_band_analysis_integration.py
+├── test_anomaly_detector.py # 异常检测
+├── test_anomaly_integration.py
+├── test_annotation_service.py # 标注服务
+├── test_auto_preprocess.py # 自动预处理
+├── test_preprocessing.py   # 预处理方法
+├── test_demo_endpoint.py   # Demo 端点
+└── test_async_blocking_fix.py # 异步阻塞修复验证
 ```
 
 ## 代码规范
@@ -393,90 +419,29 @@ edf-web/
 ├── frontend/                    # React 前端
 │   ├── src/
 │   │   ├── App.tsx             # 主应用容器
-│   │   ├── api/
-│   │   │   ├── edf.ts          # EDF API 调用
-│   │   │   ├── mode.ts         # 模式管理 API 调用
-│   │   │   └── __tests__/      # API 测试
-│   │   ├── store/
-│   │   │   ├── edfStore.ts     # Zustand 全局状态 (包含模式管理)
-│   │   │   └── __tests__/      # Store 测试
-│   │   ├── utils/
-│   │   │   ├── expressionParser.ts  # 表达式验证
-│   │   │   ├── signalStorage.ts     # localStorage 操作
-│   │   │   ├── statsCalculator.ts   # 统计计算
-│   │   │   ├── modeCompatibilityChecker.ts  # 模式兼容性检查
-│   │   │   ├── modeRecommender.ts  # 模式推荐算法
-│   │   │   └── __tests__/      # 工具函数测试
-│   │   ├── types/
-│   │   │   ├── signal.ts       # 信号类型定义
-│   │   │   ├── analysis.ts     # 分析类型定义
-│   │   │   ├── mode.ts         # 模式类型定义
-│   │   │   └── __tests__/      # 类型测试
-│   │   └── components/         # React 组件 (25 个)
-│   │       ├── WaveformCanvas.tsx
-│   │       ├── SignalEditor.tsx
-│   │       ├── SignalList.tsx
-│   │       ├── SignalExpressionBuilder.tsx
-│   │       ├── ModeEditor.tsx      # 模式编辑器
-│   │       ├── ModeSelector.tsx    # 模式选择器
-│   │       ├── ModeCard.tsx        # 模式卡片
-│   │       ├── CompatibilityWarning.tsx  # 兼容性警告
-│   │       ├── SelectionInfo.tsx       # 选区统计
-│   │       ├── StatsView.tsx           # 时域分析
-│   │       ├── FrequencyView.tsx       # 频带分析
-│   │       ├── PreprocessSelector.tsx  # 预处理选择器
-│   │       ├── AdvancedAnalysisModal.tsx  # 高级分析模态框
-│   │       ├── OverviewStrip.tsx
-│   │       ├── ChannelSelector.tsx
-│   │       ├── TimeAxis.tsx
-│   │       ├── AmplitudeAxis.tsx
-│   │       ├── TimeToolbar.tsx
-│   │       ├── CursorOverlay.tsx
-│   │       ├── TimeScrubber.tsx
-│   │       ├── ZoomIndicator.tsx
-│   │       ├── ResolutionIndicator.tsx
-│   │       ├── InteractionHint.tsx
-│   │       ├── KeyboardShortcuts.tsx
-│   │       └── __tests__/      # 组件测试
+│   │   ├── env.ts              # 环境变量 (API URL)
+│   │   ├── api/                # API 客户端 (edf.ts, mode.ts, annotations.ts)
+│   │   ├── store/edfStore.ts   # Zustand 全局状态
+│   │   ├── utils/              # 工具函数 (表达式解析、统计、模式兼容性)
+│   │   ├── types/              # 类型定义 (signal, analysis, mode, annotation)
+│   │   └── components/         # React 组件 (~27 个)
+│   │       ├── WaveformCanvas.tsx      # 波形画布
+│   │       ├── AnnotationLayer.tsx     # 标注叠加层
+│   │       ├── AnnotationPanel.tsx     # 标注面板
+│   │       └── advanced-analysis/     # 高级分析子组件
 │   ├── package.json
-│   └── vite.config.ts
+│   └── vite.config.ts          # 含 Vite proxy (→ localhost:8000)
 │
 ├── backend/                     # FastAPI 后端
 │   ├── app/
-│   │   ├── main.py             # 应用入口
+│   │   ├── main.py             # 应用入口、路由注册、CORS 配置
 │   │   ├── config.py           # 配置管理
-│   │   ├── models/             # 数据模型
-│   │   │   └── mode.py         # 模式相关 Pydantic 模型
-│   │   ├── api/routes/         # API 路由
-│   │   │   ├── signals.py      # 信号管理
-│   │   │   ├── analysis.py     # 数据分析
-│   │   │   ├── modes.py        # 模式管理
-│   │   │   ├── upload.py       # 文件上传
-│   │   │   ├── metadata.py     # 元数据
-│   │   │   ├── waveform.py     # 波形数据
-│   │   │   └── waveform_overview.py
-│   │   ├── services/
-│   │   │   ├── edf_parser.py   # EDF 解析
-│   │   │   ├── signal_calculator.py  # 信号计算
-│   │   │   ├── analysis_service.py   # 分析服务
-│   │   │   ├── mode_service.py # 模式管理服务
-│   │   │   ├── preprocessing.py  # 信号预处理
-│   │   │   ├── auto_preprocess.py # 自动预处理流水线
-│   │   │   └── file_manager.py # 文件管理
-│   │   └── utils/
-│   │       └── expression_validator.py  # 表达式验证
-│   ├── tests/                  # 后端测试
-│   │   ├── test_signals_api.py
-│   │   ├── test_analysis_api.py
-│   │   ├── test_modes_api.py  # 模式管理 API 测试
-│   │   ├── test_signal_calculator.py
-│   │   ├── test_analysis_service.py
-│   │   └── conftest.py
-│   ├── storage/                # 文件存储
-│   │   ├── modes/              # 模式数据存储
-│   │   │   ├── custom_modes.json  # 自定义模式
-│   │   │   └── usage_stats.json   # 使用统计
-│   │   └── [edf files]         # EDF 文件存储
+│   │   ├── models/mode.py      # Pydantic 模型
+│   │   ├── api/routes/         # API 路由 (12 个)
+│   │   ├── services/           # 业务逻辑 (10 个服务)
+│   │   └── utils/expression_validator.py
+│   ├── tests/                  # 后端测试 (~20 个文件)
+│   ├── storage/                # 文件存储 (EDF + 模式数据)
 │   └── requirements.txt
 │
 ├── docker-compose.yml
@@ -531,61 +496,24 @@ edf-web/
 
 ## 调试
 
-**前端**: `console.log` 检查 Zustand store 状态，查看 localStorage 中的信号数据
+**前端**: 检查 Zustand store 状态、localStorage 中的信号数据
 **后端**: `logging.basicConfig(level=logging.DEBUG)` 启用详细日志
+**API 文档**: http://localhost:8000/docs (Swagger UI)
 
-**常见问题**:
+## 常见问题
+
 | 问题 | 解决方案 |
 |------|--------|
 | 表达式验证失败 | 检查通道名称、括号平衡 |
 | 信号不显示 | 检查浏览器控制台、API 响应 |
 | 文件未找到 | 检查 storage 目录 |
-| 内存不足 | 减少时间窗口或通道数量 |
+| 内存不足 | 使用 `preload=False` + `crop()` + `pick_channels()` |
 | API 超时 | 增加超时时间或优化表达式 |
-
-## 常见问题
-
-**Q: 支持哪些 NumPy 函数？**
-A: `np.abs`, `np.mean`, `np.std`, `np.min`, `np.max`, `np.sum`, `np.sqrt`, `np.log`, `np.exp`
-
-**Q: 如何添加新函数？**
-A: 修改 `backend/app/utils/expression_validator.py` 中的白名单
-
-**Q: 派生信号数据会被保存吗？**
-A: 信号定义保存到 localStorage，计算结果每次重新计算
-
-**Q: 支持多少个派生信号？**
-A: 理论无限制，建议不超过 50 个（性能考虑）
-
-**Q: 模式和派生信号有什么区别？**
-A: 模式是完整的配置方案，包含通道选择、视图参数、分析设置和预定义的派生信号；派生信号是单个数学表达式计算的结果。一个模式可以包含多个派生信号配置。
-
-**Q: 如何创建自定义模式？**
-A: 点击模式选择器旁的 "+" 按钮，在 ModeEditor 中配置通道、视图参数和派生信号，保存后会创建新的自定义模式。
-
-**Q: 内置模式可以修改或删除吗？**
-A: 内置模式 (isBuiltIn: true) 不能修改或删除，但可以复制后创建自定义版本。
-
-**Q: 模式兼容性检查如何工作？**
-A: 系统检查模式定义的必需通道 (requiredChannels) 是否在当前 EDF 文件中可用，以及采样率是否满足最小要求 (minSamplingRate)。
-
-**Q: 表达式求值安全吗？**
-A: 后端使用严格的白名单机制，只允许特定的 NumPy 函数，禁止文件 I/O 和系统命令，限制表达式长度 ≤ 500 字符，确保求值安全。
+| 后端冻结 | CPU 密集任务需用 `asyncio.to_thread` 或 `ProcessPoolExecutor` |
 
 ## 安全特性
 
-### 表达式求值安全
-
-后端实现严格的表达式验证和安全求值机制 (`backend/app/utils/expression_validator.py`):
-
-1. **白名单机制**: 只允许特定的 NumPy 函数 (`np.abs`, `np.mean`, `np.std`, `np.min`, `np.max`, `np.sum`, `np.sqrt`, `np.log`, `np.exp`)
-2. **表达式长度限制**: 最大 500 字符
-3. **语法验证**: 检查括号平衡、操作符序列
-4. **文件 I/O 禁止**: 表达式中不允许任何文件操作
-5. **系统命令禁止**: 表达式中不允许执行系统命令
-
-### API 安全
-
-- **内置模式保护**: 内置模式不能通过 API 修改或删除 (HTTP 403)
-- **错误消息安全**: 错误消息不泄露敏感的系统信息
-- **输入清理**: 所有用户输入都经过 Pydantic 验证
+- **表达式求值**: 白名单机制，只允许 `np.abs/mean/std/min/max/sum/sqrt/log/exp`，长度 ≤ 500 字符，禁止文件 I/O 和系统命令
+- **内置模式保护**: 不能通过 API 修改或删除 (HTTP 403)
+- **输入验证**: 所有用户输入经过 Pydantic 验证
+- **错误消息**: 不泄露敏感系统信息

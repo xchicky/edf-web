@@ -298,6 +298,11 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       canvas.height = pixelHeight;
     }
 
+    // Set CSS display height to match intended CSS dimensions.
+    // Without this, the canvas displays at its buffer height (physical pixels)
+    // in CSS pixels, which is wrong at DPR > 1 (e.g., 2x too tall on Retina).
+    canvas.style.height = `${cssHeight}px`;
+
     // Apply DPI scaling so all drawing uses CSS pixel coordinates
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
