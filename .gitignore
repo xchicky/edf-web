@@ -60,6 +60,26 @@ ENV/
 Thumbs.db
 .DS_Store
 
+# Coverage data
+.coverage
+
+# Agent/tool local state
+.clawdbot/
+.sisyphus/
+
+# Experiment generated reports
+backend/exp/reports/
+
+# Playwright test output
+playwright-report/
+playwright-results.json
+playwright-results.xml
+playwright-results/
+test-results/
+
+# Backup files
+*_backup.*
+
 # Misc
 *.pid
 *.seed

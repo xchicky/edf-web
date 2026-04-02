@@ -1,0 +1,150 @@
+/**
+ * 信号波形对比视图样式
+ */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+}
+
+.controlButton {
+  padding: 0.375rem 0.75rem;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  color: #374151;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.controlButton:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.controlButton:active {
+  background: #e5e7eb;
+}
+
+.scaleLabel {
+  font-size: 0.875rem;
+  color: #6b7280;
+  padding: 0 0.5rem;
+}
+
+.waveforms {
+  display: flex;
+  gap: 1rem;
+  min-height: 400px;
+}
+
+.panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.panelHeader h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-weight: 500;
+}
+
+.badgeOriginal {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.badgePreprocessed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.panelContent {
+  flex: 1;
+  position: relative;
+  padding: 1rem;
+  min-height: 300px;
+}
+
+.loading,
+.error,
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.error {
+  color: #ef4444;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  background: white;
+}
+
+/* 响应式设计 */
+@media (max-width: 1280px) {
+  .waveforms {
+    flex-direction: column;
+  }
+
+  .panel {
+    min-height: 300px;
+  }
+
+  .canvas {
+    min-height: 250px;
+  }
+}
+
+@media (max-width: 768px) {
+  .controls {
+    flex-wrap: wrap;
+  }
+
+  .panelContent {
+    padding: 0.5rem;
+  }
+}

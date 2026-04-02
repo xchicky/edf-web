@@ -1,0 +1,80 @@
+/* AdvancedAnalysisPage 样式 */
+
+.advancedAnalysisPage {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.header {
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid #e5e7eb;
+  padding: 1rem 1.5rem;
+}
+
+.main {
+  padding: 1.5rem;
+}
+
+.content {
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.preprocessSection {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 1rem 1.5rem;
+}
+
+.preprocessControls {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.panelContainer {
+  flex: 1;
+  overflow: auto;
+}
+
+.panelGrid {
+  display: flex;
+  height: calc(100vh - 280px);
+}
+
+.panel {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.panelOriginal {
+  border-right: 1px solid #e5e7eb;
+}
+
+.panelPreprocessed {
+  border-right: none;
+}
+
+/* Loading state */
+.loading {
+  text-align: center;
+  padding: 2rem 0;
+  color: #6b7280;
+}
+
+/* Error state */
+.error {
+  text-align: center;
+  padding: 2rem 0;
+  color: #ef4444;
+}
+
+/* Empty state */
+.empty {
+  text-align: center;
+  padding: 2rem 0;
+  color: #9ca3af;
+}
