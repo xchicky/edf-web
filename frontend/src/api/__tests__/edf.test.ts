@@ -364,6 +364,7 @@ describe('EDF API', () => {
           channels: channels,
           start,
           duration,
+          preprocess: null,
         }
       );
     });
@@ -402,6 +403,7 @@ describe('EDF API', () => {
           channels: null,
           start,
           duration,
+          preprocess: null,
         }
       );
     });
@@ -438,6 +440,7 @@ describe('EDF API', () => {
           start,
           duration,
           bands: bands,
+          preprocess: null,
         }
       );
     });
@@ -469,6 +472,7 @@ describe('EDF API', () => {
           start,
           duration,
           bands: null,
+          preprocess: null,
         }
       );
     });
@@ -505,6 +509,7 @@ describe('EDF API', () => {
           duration,
           fmin: fmin,
           fmax: fmax,
+          preprocess: null,
         }
       );
     });
@@ -533,6 +538,7 @@ describe('EDF API', () => {
           duration: 10,
           fmin: 0.5,
           fmax: 50,
+          preprocess: null,
         }
       );
     });
@@ -599,6 +605,7 @@ describe('EDF API', () => {
           fmin: fmin,
           fmax: fmax,
           bands: bands,
+          preprocess: null,
         }
       );
     });
@@ -648,6 +655,7 @@ describe('EDF API', () => {
           fmin: 0.5,
           fmax: 50,
           bands: null,
+          preprocess: null,
         }
       );
     });

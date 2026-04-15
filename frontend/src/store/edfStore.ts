@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import type { Signal, SignalComputationResult } from '../types/signal';
-import type { AnalysisResult, AnalysisType, TimeDomainStats, BandPowerResult } from '../types/analysis';
+import type { AnalysisResult, AnalysisType, TimeDomainStats, BandPowerResult, PreprocessConfig } from '../types/analysis';
 import type { Mode, ModeCategory, ModeListResponse, CompatibilityCheckResult } from '../types/mode';
 import { loadSignals, saveSignals } from '../utils/signalStorage';
-import { analyzeTimeDomain, analyzeBandPower } from '../api/edf';
+import { analyzeTimeDomain, analyzeBandPower, analyzeComprehensive } from '../api/edf';
 import { getAllModes, checkModeCompatibility, recordModeUsage } from '../api/mode';
 import { computeTimeDomainStats, findClosestIndex, computeBandPowers } from '../utils/statsCalculator';
 
@@ -69,6 +69,7 @@ interface EDFStore {
   isAnalysisLoading: boolean;
   analysisError: string | null;
   selectedAnalysisType: AnalysisType;
+  preprocessConfig: PreprocessConfig;
 
   // 侧边栏状态
   isLeftSidebarCollapsed: boolean;
@@ -125,6 +126,7 @@ interface EDFStore {
   ) => Promise<void>;
   clearAnalysisResults: () => void;
   setSelectedAnalysisType: (type: AnalysisType) => void;
+  setPreprocessConfig: (config: PreprocessConfig) => void;
 
   // 侧边栏方法
   toggleLeftSidebar: () => void;
@@ -174,6 +176,7 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
   isAnalysisLoading: false,
   analysisError: null,
   selectedAnalysisType: 'stats',
+  preprocessConfig: { method: 'none', parameters: null },
 
   // 侧边栏状态 - 从 localStorage 读取
   isLeftSidebarCollapsed: typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function' ? localStorage.getItem('sidebarLeftCollapsed') === 'true' : false,
@@ -313,7 +316,7 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
 
   // 分析方法
   runAnalysis: async (selectionStart, selectionEnd, type) => {
-    const { metadata, selectedChannels, signals, signalData } = get();
+    const { metadata, selectedChannels, signals, signalData, preprocessConfig } = get();
 
     if (!metadata?.file_id) {
       set({ analysisError: '没有加载的文件' });
@@ -339,7 +342,8 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
           metadata.file_id,
           start,
           duration,
-          channelNames.length > 0 ? channelNames : undefined
+          channelNames.length > 0 ? channelNames : undefined,
+          preprocessConfig.method !== 'none' ? preprocessConfig : null
         );
 
         // 转换响应数据为前端格式
@@ -392,7 +396,9 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
           metadata.file_id,
           start,
           duration,
-          channelNames.length > 0 ? channelNames : undefined
+          channelNames.length > 0 ? channelNames : undefined,
+          undefined,
+          preprocessConfig.method !== 'none' ? preprocessConfig : null
         );
 
         // 转换响应数据为前端格式
@@ -440,8 +446,68 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
           },
           isAnalysisLoading: false,
         });
+      } else if (type === 'comprehensive') {
+        const response = await analyzeComprehensive(
+          metadata.file_id,
+          start,
+          duration,
+          channelNames.length > 0 ? channelNames : undefined,
+          undefined,
+          undefined,
+          undefined,
+          preprocessConfig.method !== 'none' ? preprocessConfig : null
+        );
+
+        const timeDomain: Record<string, TimeDomainStats> = {};
+        if (response.time_domain) {
+          for (const [ch, stats] of Object.entries(response.time_domain)) {
+            timeDomain[ch] = {
+              mean: stats.mean,
+              std: stats.std,
+              min: stats.min,
+              max: stats.max,
+              rms: stats.rms,
+              peakToPeak: stats.peak_to_peak,
+              kurtosis: stats.kurtosis,
+              skewness: stats.skewness,
+              nSamples: stats.n_samples,
+            };
+          }
+        }
+
+        const bandPowers: Record<string, Record<string, BandPowerResult>> = {};
+        if (response.band_power) {
+          for (const [ch, bands] of Object.entries(response.band_power)) {
+            bandPowers[ch] = {};
+            for (const [band, data] of Object.entries(bands)) {
+              bandPowers[ch][band] = {
+                absolute: data.absolute,
+                relative: data.relative,
+                range: data.range as [number, number],
+              };
+            }
+          }
+        }
+
+        set({
+          analysisResults: {
+            fileId: response.file_id,
+            type,
+            selectionStart: start,
+            selectionEnd: end,
+            duration,
+            timeDomain,
+            frequency: response.band_power
+              ? { channels: response.channels, bandPowers }
+              : undefined,
+            psd: response.psd
+              ? { channels: response.channels, psdData: response.psd as Record<string, { frequencies: number[]; psd: number[]; sfreq: number }> }
+              : undefined,
+            timestamp: Date.now(),
+          },
+          isAnalysisLoading: false,
+        });
       } else {
-        // 综合分析或其他类型（暂未实现）
         set({
           analysisError: `分析类型 '${type}' 暂未实现`,
           isAnalysisLoading: false,
@@ -454,6 +520,7 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
   },
   clearAnalysisResults: () => set({ analysisResults: null, analysisError: null }),
   setSelectedAnalysisType: (type) => set({ selectedAnalysisType: type }),
+  setPreprocessConfig: (preprocessConfig) => set({ preprocessConfig }),
 
   // 侧边栏方法
   toggleLeftSidebar: () => {
@@ -692,6 +759,7 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
       isAnalysisLoading: false,
       analysisError: null,
       selectedAnalysisType: 'stats',
+      preprocessConfig: { method: 'none', parameters: null },
       modes: [],
       currentModeId: null,
       modeRecommendations: null,

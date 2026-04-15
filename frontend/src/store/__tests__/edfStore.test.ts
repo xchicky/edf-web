@@ -549,12 +549,12 @@ describe('useEDFStore - Analysis', () => {
       expect(useEDFStore.getState().isAnalysisLoading).toBe(false);
     });
 
-    it('应处理未实现的分析类型', async () => {
+    it('应处理未知的分析类型', async () => {
       const { runAnalysis } = useEDFStore.getState();
 
-      await runAnalysis(0, 10, 'comprehensive' as any);
+      await runAnalysis(0, 10, 'unknown_type' as any);
 
-      expect(useEDFStore.getState().analysisError).toBe('分析类型 \'comprehensive\' 暂未实现');
+      expect(useEDFStore.getState().analysisError).toBe('分析类型 \'unknown_type\' 暂未实现');
     });
   });
 });

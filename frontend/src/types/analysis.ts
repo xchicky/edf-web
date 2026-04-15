@@ -70,6 +70,7 @@ export interface TimeDomainRequest {
   channels?: string[] | null;
   start: number;
   duration: number;
+  preprocess?: PreprocessConfig | null;
 }
 
 /**
@@ -99,6 +100,7 @@ export interface BandPowerRequest {
   start: number;
   duration: number;
   bands?: Record<string, [number, number]> | null;
+  preprocess?: PreprocessConfig | null;
 }
 
 /**
@@ -123,6 +125,7 @@ export interface PSDRequest {
   duration: number;
   fmin?: number;
   fmax?: number;
+  preprocess?: PreprocessConfig | null;
 }
 
 /**
@@ -148,6 +151,7 @@ export interface ComprehensiveRequest {
   fmin?: number;
   fmax?: number;
   bands?: Record<string, [number, number]> | null;
+  preprocess?: PreprocessConfig | null;
 }
 
 /**
@@ -191,3 +195,71 @@ export const EEG_BANDS = {
 } as const;
 
 export type EEGBandName = keyof typeof EEG_BANDS;
+
+/**
+ * 预处理方法类型
+ */
+export type PreprocessMethod =
+  | 'none'
+  | 'linear_detrend'
+  | 'polynomial_detrend'
+  | 'highpass_filter'
+  | 'bandpass_filter'
+  | 'baseline_correction';
+
+/**
+ * 预处理配置
+ */
+export interface PreprocessConfig {
+  method: PreprocessMethod;
+  parameters?: Record<string, number> | null;
+}
+
+/**
+ * 预处理方法定义 (对照后端 PREPROCESS_OPTIONS)
+ */
+export const PREPROCESS_METHODS: Record<PreprocessMethod, {
+  name: string;
+  description: string;
+  parameters?: Record<string, {
+    default: number;
+    min: number;
+    max: number;
+    description: string;
+  }>;
+}> = {
+  none: {
+    name: '无预处理',
+    description: '保持原始信号',
+  },
+  linear_detrend: {
+    name: '线性去漂移',
+    description: '适用于线性漂移',
+  },
+  polynomial_detrend: {
+    name: '多项式去漂移',
+    description: '适用于复杂漂移',
+    parameters: {
+      order: { default: 2, min: 1, max: 5, description: '多项式阶数' },
+    },
+  },
+  highpass_filter: {
+    name: '高通滤波',
+    description: '适用于低频漂移',
+    parameters: {
+      cutoff: { default: 0.5, min: 0.1, max: 2.0, description: '截止频率 (Hz)' },
+    },
+  },
+  bandpass_filter: {
+    name: '带通滤波',
+    description: '保留特定频率范围',
+    parameters: {
+      lowcut: { default: 0.5, min: 0.1, max: 10.0, description: '低截止频率 (Hz)' },
+      highcut: { default: 50.0, min: 10.0, max: 100.0, description: '高截止频率 (Hz)' },
+    },
+  },
+  baseline_correction: {
+    name: '基线校正',
+    description: '使用移动平均去除基线',
+  },
+};

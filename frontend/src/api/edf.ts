@@ -6,6 +6,7 @@ import type {
   BandPowerResponse,
   PSDResponse,
   ComprehensiveResponse,
+  PreprocessConfig,
 } from '../types/analysis';
 
 const API_BASE = () => getApiUrl('');
@@ -126,12 +127,14 @@ export async function analyzeTimeDomain(
   fileId: string,
   start: number,
   duration: number,
-  channels?: string[]
+  channels?: string[],
+  preprocess?: PreprocessConfig | null
 ): Promise<TimeDomainResponse> {
   const response = await axios.post(`${API_BASE()}/analysis/time_domain/${fileId}`, {
     channels: channels ?? null,
     start,
     duration,
+    preprocess: preprocess ?? null,
   });
 
   return response.data;
@@ -145,13 +148,15 @@ export async function analyzeBandPower(
   start: number,
   duration: number,
   channels?: string[],
-  bands?: Record<string, [number, number]>
+  bands?: Record<string, [number, number]>,
+  preprocess?: PreprocessConfig | null
 ): Promise<BandPowerResponse> {
   const response = await axios.post(`${API_BASE()}/analysis/band_power/${fileId}`, {
     channels: channels ?? null,
     start,
     duration,
     bands: bands ?? null,
+    preprocess: preprocess ?? null,
   });
 
   return response.data;
@@ -166,7 +171,8 @@ export async function analyzePSD(
   duration: number,
   channels?: string[],
   fmin?: number,
-  fmax?: number
+  fmax?: number,
+  preprocess?: PreprocessConfig | null
 ): Promise<PSDResponse> {
   const response = await axios.post(`${API_BASE()}/analysis/psd/${fileId}`, {
     channels: channels ?? null,
@@ -174,6 +180,7 @@ export async function analyzePSD(
     duration,
     fmin: fmin ?? 0.5,
     fmax: fmax ?? 50,
+    preprocess: preprocess ?? null,
   });
 
   return response.data;
@@ -189,7 +196,8 @@ export async function analyzeComprehensive(
   channels?: string[],
   fmin?: number,
   fmax?: number,
-  bands?: Record<string, [number, number]>
+  bands?: Record<string, [number, number]>,
+  preprocess?: PreprocessConfig | null
 ): Promise<ComprehensiveResponse> {
   const response = await axios.post(`${API_BASE()}/analysis/comprehensive/${fileId}`, {
     channels: channels ?? null,
@@ -198,6 +206,7 @@ export async function analyzeComprehensive(
     fmin: fmin ?? 0.5,
     fmax: fmax ?? 50,
     bands: bands ?? null,
+    preprocess: preprocess ?? null,
   });
 
   return response.data;

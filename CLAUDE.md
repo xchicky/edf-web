@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 EEG/脑电图数据可视化 Web 应用，支持 EDF/EDF+ 文件格式。前后端分离架构。
 
 **核心技术栈**:
-- 前端: React 19.2.0 + TypeScript 5.9.3 + Vite 7.2.4 + Zustand 5.0.10 + Canvas API
+- 前端: React 19.2.0 + TypeScript 5.9.3 + Vite 7.2.4 + Zustand 5.0.10 + TanStack Query 5.90.20 + Canvas API + uPlot 1.6.32
 - 后端: FastAPI 0.104.1 + MNE-Python 1.11.0
 - 通信: REST API (Axios)
 - 容器化: Docker + Docker Compose
@@ -23,6 +23,9 @@ npm run test:coverage    # 生成测试覆盖率报告 (要求 80%)
 npm run lint             # ESLint 代码检查
 npm run test:e2e         # Playwright E2E 测试
 npm run test:e2e:headed  # Playwright E2E (有头模式)
+npm run test:e2e:ui      # Playwright E2E (UI 模式)
+npm run test:e2e:debug   # Playwright E2E (调试模式)
+npm run test:e2e:report  # 查看 Playwright 测试报告
 ```
 
 ### 后端 (backend/)
@@ -89,6 +92,10 @@ EDF 文件存储 (backend/storage/)
 - `SelectionInfo.tsx` / `StatsView.tsx` / `FrequencyView.tsx` - 数据分析面板
 - `AnnotationLayer.tsx` / `AnnotationPanel.tsx` - 标注系统 (伪迹/异常标注展示与管理)
 - `PreprocessSelector.tsx` / `AdvancedAnalysisModal.tsx` - 预处理与高级分析
+- `advanced-analysis/SignalComparisonView.tsx` - 信号对比视图 (原始 vs 预处理后)
+
+**独立页面** (`frontend/src/pages/`):
+- `AdvancedAnalysisPage.tsx` - 高级分析独立页面，支持在新窗口中打开，进行原始信号和预处理后信号的对比分析
 
 **API 客户端**:
 - `frontend/src/api/edf.ts` - EDF 相关 API (上传、元数据、波形、信号、分析)
@@ -166,19 +173,19 @@ POST /api/signals/calculate           # 计算派生信号
 
 # 数据分析端点
 POST /api/analysis/time-domain        # 时域分析
-     Body: {file_id: string, start: number, duration: number, channels: string[]}
+     Body: {file_id: string, start: number, duration: number, channels: string[], preprocess?: PreprocessConfig}
      Response: {channelName: {min, max, mean, std, rms, peakToPeak, kurtosis, skewness, nSamples}}
 
 POST /api/analysis/band-power         # 频带功率分析
-     Body: {file_id: string, start: number, duration: number, channels: string[]}
+     Body: {file_id: string, start: number, duration: number, channels: string[], bands?: Record<string, [number, number]>, preprocess?: PreprocessConfig}
      Response: {channelName: {delta, theta, alpha, beta, gamma: {absolute, relative}}}
 
 POST /api/analysis/psd                # 功率谱密度分析
-     Body: {file_id: string, start: number, duration: number, channels: string[]}
+     Body: {file_id: string, start: number, duration: number, channels: string[], fmin?: number, fmax?: number, preprocess?: PreprocessConfig}
      Response: {channelName: {frequencies: number[], psd: number[]}}
 
 POST /api/analysis/comprehensive      # 综合分析
-     Body: {file_id: string, start: number, duration: number, channels: string[]}
+     Body: {file_id: string, start: number, duration: number, channels: string[], fmin?: number, fmax?: number, bands?: Record<string, [number, number]>, preprocess?: PreprocessConfig}
      Response: {timeDomain: {...}, frequency: {bandPowers: {...}, psd: {...}}, selectionStart, selectionEnd, duration}
 
 # 模式管理端点
@@ -256,6 +263,12 @@ np.abs(Fp1 - F3)      # 绝对值
 **前端组件**:
 - `PreprocessSelector.tsx` - 预处理方法选择器
 - `AdvancedAnalysisModal.tsx` - 高级分析模态框 (对比原始与预处理后信号)
+
+**高级分析独立页面** (`frontend/src/pages/AdvancedAnalysisPage.tsx`):
+- 在新窗口中打开的独立页面，用于原始信号和预处理后信号的对比分析
+- 通过 URL 参数接收配置：`fileId`, `selectionStart`, `selectionEnd`, `channels`, `analysisType`, `preprocessMethod`
+- 支持两种视图：波形对比 (SignalComparisonView) 和统计对比 (StatsView/FrequencyView)
+- 预处理参数可通过滑块实时调整，自动重新计算分析结果
 
 ### 3. 数据分析系统
 
@@ -411,6 +424,8 @@ style(waveform): improve vertical grid line visibility for better time reference
 **前端**:
 - `react@^19.2.0`, `typescript@~5.9.3`, `vite@^7.2.4`
 - `zustand@^5.0.10`, `axios@^1.13.2`, `tailwindcss@^4.1.18`
+- `@tanstack/react-query@^5.90.20` - 数据获取/缓存，用于 API 请求状态管理
+- `uplot@^1.6.32` - 高性能图表库，用于大数据量可视化
 
 ## 文件结构
 
@@ -424,11 +439,14 @@ edf-web/
 │   │   ├── store/edfStore.ts   # Zustand 全局状态
 │   │   ├── utils/              # 工具函数 (表达式解析、统计、模式兼容性)
 │   │   ├── types/              # 类型定义 (signal, analysis, mode, annotation)
-│   │   └── components/         # React 组件 (~27 个)
+│   │   ├── pages/              # 独立页面
+│   │   │   └── AdvancedAnalysisPage.tsx  # 高级分析独立页面
+│   │   └── components/         # React 组件 (约 27 个)
 │   │       ├── WaveformCanvas.tsx      # 波形画布
 │   │       ├── AnnotationLayer.tsx     # 标注叠加层
 │   │       ├── AnnotationPanel.tsx     # 标注面板
-│   │       └── advanced-analysis/     # 高级分析子组件
+│   │       └── advanced-analysis/      # 高级分析子组件
+│   │           └── SignalComparisonView.tsx  # 信号对比视图
 │   ├── package.json
 │   └── vite.config.ts          # 含 Vite proxy (→ localhost:8000)
 │
@@ -437,7 +455,7 @@ edf-web/
 │   │   ├── main.py             # 应用入口、路由注册、CORS 配置
 │   │   ├── config.py           # 配置管理
 │   │   ├── models/mode.py      # Pydantic 模型
-│   │   ├── api/routes/         # API 路由 (12 个)
+│   │   ├── api/routes/         # API 路由 (11 个)
 │   │   ├── services/           # 业务逻辑 (10 个服务)
 │   │   └── utils/expression_validator.py
 │   ├── tests/                  # 后端测试 (~20 个文件)

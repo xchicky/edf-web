@@ -24,6 +24,10 @@ import { ResolutionIndicator } from './components/ResolutionIndicator';
 import { InteractionHint } from './components/InteractionHint';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { AnnotationPanel } from './components/AnnotationPanel';
+import { PreprocessSelector } from './components/PreprocessSelector';
+import { SelectionInfo } from './components/SelectionInfo';
+import { ZoomIndicator } from './components/ZoomIndicator';
+import { AdvancedAnalysisModal } from './components/AdvancedAnalysisModal';
 import './App.css';
 
 function App() {
@@ -81,7 +85,10 @@ function App() {
     saveSignalsToStorage,
     runAnalysis,
     clearAnalysisResults,
+    clearSelection,
     setSelectedAnalysisType,
+    preprocessConfig,
+    setPreprocessConfig,
     // 模式管理方法
     loadModes,
     applyMode,
@@ -104,6 +111,9 @@ function App() {
   // 模式编辑器状态
   const [isModeEditorOpen, setIsModeEditorOpen] = useState(false);
   const [editingMode, setEditingMode] = useState<any>(null);
+
+  // 高级分析模态框状态
+  const [isAdvancedAnalysisOpen, setIsAdvancedAnalysisOpen] = useState(false);
 
   // Track actual canvas width to match WaveformCanvas and TimeAxis
   const waveformContainerRef = React.useRef<HTMLDivElement>(null);
@@ -834,6 +844,12 @@ function App() {
               <button onClick={handleLoadWaveform} disabled={isLoading} className="primary-button">
                 {isLoading ? 'Loading...' : 'Load Waveform'}
               </button>
+
+              <PreprocessSelector
+                config={preprocessConfig}
+                onConfigChange={setPreprocessConfig}
+                disabled={!metadata}
+              />
             </div>
           )}
 
@@ -946,7 +962,25 @@ function App() {
                 onTimeChange={setCurrentTime}
                 channels={selectedChannels}
               />
+
+              {metadata && (
+                <ZoomIndicator
+                  timeZoom={windowDuration}
+                  amplitudeZoom={amplitudeScale}
+                  maxTimeZoom={60}
+                  maxAmplitudeZoom={10}
+                />
+              )}
             </>
+          )}
+
+          {metadata && hasSelection && selectionStart !== null && selectionEnd !== null && (
+            <SelectionInfo
+              selectionStart={selectionStart}
+              selectionEnd={selectionEnd}
+              waveformData={waveform}
+              onClose={clearSelection}
+            />
           )}
         </section>
 
@@ -1062,6 +1096,20 @@ function App() {
         onDelete={handleDeleteMode}
       />
 
+      {/* 高级分析模态框 */}
+      {metadata && hasSelection && selectionStart !== null && selectionEnd !== null && (
+        <AdvancedAnalysisModal
+          isOpen={isAdvancedAnalysisOpen}
+          fileId={metadata.file_id}
+          selectionStart={selectionStart}
+          selectionEnd={selectionEnd}
+          channelNames={selectedChannels.map(i => metadata.channel_names[i]).filter(Boolean)}
+          initialAnalysisType={selectedAnalysisType}
+          initialPreprocessConfig={preprocessConfig}
+          onClose={() => setIsAdvancedAnalysisOpen(false)}
+        />
+      )}
+
       {/* 分析结果视图 */}
       {(hasSelection || isAnalysisLoading || analysisError) && (
         <>
@@ -1079,6 +1127,13 @@ function App() {
             >
               频带功率
             </button>
+            <button
+              className="analysis-type-btn"
+              onClick={() => setIsAdvancedAnalysisOpen(true)}
+              title="高级分析: 对比原始信号与预处理后信号的分析结果"
+            >
+              高级分析
+            </button>
           </div>
 
           {/* 根据类型显示对应的分析视图 */}
@@ -1087,14 +1142,14 @@ function App() {
               results={analysisResults}
               isLoading={isAnalysisLoading}
               error={analysisError}
-              onClose={clearAnalysisResults}
+              onClose={clearSelection}
             />
           ) : (
             <FrequencyView
               results={analysisResults}
               isLoading={isAnalysisLoading}
               error={analysisError}
-              onClose={clearAnalysisResults}
+              onClose={clearSelection}
             />
           )}
         </>

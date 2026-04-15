@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import type { AnalysisType, PreprocessConfig } from '../types/analysis';
+import type { AnalysisType, PreprocessConfig, PreprocessMethod } from '../types/analysis';
 import { PREPROCESS_METHODS } from '../types/analysis';
 import { analyzeTimeDomain, analyzeBandPower } from '../api/edf';
 import type { AnalysisResult } from '../types/analysis';
@@ -96,7 +96,7 @@ export function AdvancedAnalysisPage() {
   const [preprocessedError, setPreprocessedError] = useState<string | null>(null);
 
   // 当前激活的面板（用于响应式布局）
-  const [activePanel, setActivePanel] = useState<'original' | 'preprocessed'>('original');
+  const [_activePanel, _setActivePanel] = useState<'original' | 'preprocessed'>('original');
 
   // 解析 URL 参数
   useEffect(() => {
@@ -353,7 +353,7 @@ export function AdvancedAnalysisPage() {
 
   // 处理预处理方法变化
   const handlePreprocessMethodChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const newMethod = event.target.value as any;
+    const newMethod = event.target.value as PreprocessMethod;
     const methodConfig = PREPROCESS_METHODS[newMethod];
 
     const newConfig: PreprocessConfig = {
@@ -362,7 +362,7 @@ export function AdvancedAnalysisPage() {
         ? Object.entries(methodConfig.parameters).reduce(
             (acc, [key, param]) => ({
               ...acc,
-              [key]: param.default,
+              [key]: (param as { default: number; min: number; max: number; description: string }).default,
             }),
             {} as Record<string, number>
           )

@@ -143,7 +143,7 @@ export const SignalComparisonView: React.FC<SignalComparisonViewProps> = ({
   };
 
   // 移除多项式趋势
-  const removePolynomialTrend = (data: number[], order: number): number[] => {
+  const removePolynomialTrend = (data: number[], _order: number): number[] => {
     // 简化版本：使用 Savitzky-Golay 滤波器进行平滑
     // 实际实现应使用更精确的多项式拟合
     return removeBaseline(data); // 临时使用基线校正
@@ -209,7 +209,7 @@ export const SignalComparisonView: React.FC<SignalComparisonViewProps> = ({
     canvas: HTMLCanvasElement,
     waveformData: WaveformData,
     scale: number,
-    offset: number,
+    _offset: number,
     isPreprocessed: boolean
   ) => {
     const ctx = canvas.getContext('2d');
