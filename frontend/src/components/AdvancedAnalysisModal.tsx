@@ -10,6 +10,7 @@ import { PREPROCESS_METHODS } from '../types/analysis';
 import { StatsView } from './StatsView';
 import { FrequencyView } from './FrequencyView';
 import { analyzeTimeDomain, analyzeBandPower } from '../api/edf';
+import styles from './AdvancedAnalysisModal.module.css';
 
 interface AdvancedAnalysisModalProps {
   isOpen: boolean;
@@ -97,15 +98,6 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
       const end = Math.max(params.selectionStart, params.selectionEnd);
       const duration = end - start;
 
-      console.log('[AdvancedAnalysisModal] 运行原始信号分析', {
-        fileId: params.fileId,
-        start,
-        end,
-        duration,
-        channelNames: params.channelNames,
-        analysisType: params.analysisType,
-      });
-
       let result: AnalysisResult;
 
       if (params.analysisType === 'stats') {
@@ -116,8 +108,6 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
           params.channelNames.length > 0 ? params.channelNames : undefined,
           { method: 'none' }
         );
-
-        console.log('[AdvancedAnalysisModal] 时域分析响应:', response);
 
         const timeDomain: Record<string, any> = {};
         for (const [ch, stats] of Object.entries(response.statistics)) {
@@ -180,10 +170,8 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
       }
 
       setOriginalResults(result);
-      console.log('[AdvancedAnalysisModal] 原始分析结果已设置:', result);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '分析失败';
-      console.error('[AdvancedAnalysisModal] 原始分析失败:', error);
       setOriginalError(errorMessage);
     } finally {
       setOriginalLoading(false);
@@ -205,16 +193,6 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
         ? params.preprocessConfig
         : { method: 'none', parameters: null };
 
-      console.log('[AdvancedAnalysisModal] 运行预处理后信号分析', {
-        fileId: params.fileId,
-        start,
-        end,
-        duration,
-        channelNames: params.channelNames,
-        analysisType: params.analysisType,
-        preprocessConfig: configToSend,
-      });
-
       let result: AnalysisResult;
 
       if (params.analysisType === 'stats') {
@@ -225,8 +203,6 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
           params.channelNames.length > 0 ? params.channelNames : undefined,
           configToSend
         );
-
-        console.log('[AdvancedAnalysisModal] 预处理后时域分析响应:', response);
 
         const timeDomain: Record<string, any> = {};
         for (const [ch, stats] of Object.entries(response.statistics)) {
@@ -262,8 +238,6 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
           configToSend
         );
 
-        console.log('[AdvancedAnalysisModal] 预处理后频域分析响应:', response);
-
         const bandPowers: Record<string, Record<string, any>> = {};
         for (const [ch, bands] of Object.entries(response.band_powers)) {
           bandPowers[ch] = {};
@@ -291,10 +265,8 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
       }
 
       setPreprocessedResults(result);
-      console.log('[AdvancedAnalysisModal] 预处理后分析结果已设置:', result);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '分析失败';
-      console.error('[AdvancedAnalysisModal] 预处理后分析失败:', error);
       setPreprocessedError(errorMessage);
     } finally {
       setPreprocessedLoading(false);
@@ -364,59 +336,73 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
   const currentMethodConfig = PREPROCESS_METHODS[preprocessConfig.method as keyof typeof PREPROCESS_METHODS];
   const hasParameters = currentMethodConfig.parameters !== undefined;
 
-  // 调试日志 - 记录渲染状态
-  React.useEffect(() => {
-    console.log('[AdvancedAnalysisModal] 渲染状态:', {
-      isOpen,
-      fileId,
-      selectionStart,
-      selectionEnd,
-      channelNames,
-      analysisType,
-      originalLoading,
-      originalError,
-      hasOriginalResults: !!originalResults,
-      preprocessedLoading,
-      preprocessedError,
-      hasPreprocessedResults: !!preprocessedResults,
-      preprocessConfig,
-    });
-  }, [isOpen, originalLoading, originalError, originalResults, preprocessedLoading, preprocessedError, preprocessedResults, analysisType, preprocessConfig]);
+  // ESC 键关闭模态框
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      // 防止页面滚动
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [isOpen, onClose]);
+
+  // 点击背景关闭
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-2xl w-[95vw] h-[90vh] max-w-7xl flex flex-col">
+    <div
+      className={styles.overlay}
+      onClick={handleBackdropClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <div className={styles.modal}>
         {/* 头部 */}
-        <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between bg-gray-50 rounded-t-lg">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-800">高级分析</h2>
-            <p className="text-sm text-gray-500 mt-1">
+        <div className={styles.header}>
+          <div className={styles.headerInfo}>
+            <h2 id="modal-title" className={styles.title}>高级分析</h2>
+            <p className={styles.selectionInfo}>
               选区: {selectionStart.toFixed(2)}s - {selectionEnd.toFixed(2)}s ({(selectionEnd - selectionStart).toFixed(2)}s)
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl font-light leading-none"
-            aria-label="关闭"
+            className={styles.closeButton}
+            aria-label="关闭高级分析"
           >
             ×
           </button>
         </div>
 
         {/* 内容区域 */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className={styles.content}>
           {/* 预处理配置区域 */}
-          <div className="border-b border-gray-200 px-6 py-3 bg-white">
-            <div className="flex items-center gap-6 flex-wrap">
+          <div className={styles.configBar}>
+            <div className={styles.configRow}>
               {/* 预处理方法选择 */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">预处理方法:</label>
+              <div className={styles.configItem}>
+                <label className={styles.configLabel}>预处理方法:</label>
                 <select
                   value={preprocessConfig.method}
                   onChange={handlePreprocessMethodChange}
-                  className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={styles.configSelect}
                 >
                   {Object.entries(PREPROCESS_METHODS).map(([value, method]) => (
                     <option key={value} value={value}>
@@ -428,53 +414,46 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
 
               {/* 参数配置 */}
               {hasParameters && currentMethodConfig.parameters && (
-                <div className="flex items-center gap-4 flex-wrap">
+                <>
                   {Object.entries(currentMethodConfig.parameters).map(([paramName, paramConfig]) => {
                     const currentValue = preprocessConfig.parameters?.[paramName] as number | undefined;
                     return (
-                      <div key={paramName} className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600">
+                      <div key={paramName} className={styles.configItem}>
+                        <label className={styles.configLabel}>
                           {paramConfig.description}:
                         </label>
-                        <input
-                          type="range"
-                          min={paramConfig.min}
-                          max={paramConfig.max}
-                          step={paramConfig.max - paramConfig.min > 10 ? 0.5 : 0.1}
-                          value={currentValue ?? paramConfig.default}
-                          onChange={(e) => handleParameterChange(paramName, parseFloat(e.target.value))}
-                          className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                        />
-                        <span className="text-sm text-gray-700 w-10">
-                          {(currentValue ?? paramConfig.default).toFixed(1)}
-                        </span>
+                        <div className={styles.paramSlider}>
+                          <input
+                            type="range"
+                            min={paramConfig.min}
+                            max={paramConfig.max}
+                            step={paramConfig.max - paramConfig.min > 10 ? 0.5 : 0.1}
+                            value={currentValue ?? paramConfig.default}
+                            onChange={(e) => handleParameterChange(paramName, parseFloat(e.target.value))}
+                          />
+                          <span className={styles.paramValue}>
+                            {(currentValue ?? paramConfig.default).toFixed(1)}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
-                </div>
+                </>
               )}
 
               {/* 分析类型切换 */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">分析类型:</label>
-                <div className="inline-flex rounded-md shadow-sm" role="group">
+              <div className={styles.configItem}>
+                <label className={styles.configLabel}>分析类型:</label>
+                <div className={styles.typeSwitcher} role="group">
                   <button
                     onClick={() => setAnalysisType('stats')}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-l-md border ${
-                      analysisType === 'stats'
-                        ? 'bg-blue-500 text-white border-blue-500'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                    }`}
+                    className={`${styles.typeButton} ${analysisType === 'stats' ? styles.active : ''}`}
                   >
                     时域
                   </button>
                   <button
                     onClick={() => setAnalysisType('frequency')}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-r-md border-t border-b border-r ${
-                      analysisType === 'frequency'
-                        ? 'bg-blue-500 text-white border-blue-500'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                    }`}
+                    className={`${styles.typeButton} ${analysisType === 'frequency' ? styles.active : ''}`}
                   >
                     频域
                   </button>
@@ -484,24 +463,20 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
           </div>
 
           {/* 双面板对比区域 */}
-          <div className="flex-1 flex overflow-hidden">
+          <div className={styles.panels}>
             {/* 原始信号面板 */}
-            <div
-              className={`flex-1 border-r border-gray-200 flex flex-col overflow-hidden ${
-                activePanel === 'original' ? '' : 'hidden md:flex'
-              }`}
-            >
-              <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="font-semibold text-gray-700">原始信号</h3>
-                <span className="text-xs px-2 py-0.5 bg-gray-200 rounded text-gray-600">
+            <div className={`${styles.panel} ${activePanel === 'original' ? styles.active : ''}`}>
+              <div className={`${styles.panelHeader} ${styles.panelHeaderOriginal}`}>
+                <h3 className={styles.panelTitle}>原始信号</h3>
+                <span className={`${styles.panelBadge} ${styles.badgeDefault}`}>
                   无预处理
                 </span>
               </div>
-              <div className="flex-1 overflow-auto p-4">
-                {originalLoading && <div className="text-center py-8 text-gray-500">分析中...</div>}
-                {originalError && <div className="text-center py-8 text-red-500">{originalError}</div>}
+              <div className={styles.panelContent}>
+                {originalLoading && <div className={styles.panelStatus}>分析中...</div>}
+                {originalError && <div className={styles.panelError}>{originalError}</div>}
                 {!originalLoading && !originalError && !originalResults && (
-                  <div className="text-center py-8 text-gray-400">等待分析...</div>
+                  <div className={styles.panelStatus}>等待分析...</div>
                 )}
                 {!originalLoading && !originalError && originalResults && (
                   analysisType === 'stats' ? (
@@ -510,6 +485,7 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
                       isLoading={false}
                       error={null}
                       onClose={() => {}}
+                      hideCloseButton
                     />
                   ) : (
                     <FrequencyView
@@ -517,6 +493,7 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
                       isLoading={false}
                       error={null}
                       onClose={() => {}}
+                      hideCloseButton
                     />
                   )
                 )}
@@ -524,22 +501,18 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
             </div>
 
             {/* 预处理后信号面板 */}
-            <div
-              className={`flex-1 flex flex-col overflow-hidden ${
-                activePanel === 'preprocessed' ? '' : 'hidden md:flex'
-              }`}
-            >
-              <div className="px-4 py-2 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
-                <h3 className="font-semibold text-blue-700">预处理后信号</h3>
-                <span className="text-xs px-2 py-0.5 bg-blue-200 rounded text-blue-700">
+            <div className={`${styles.panel} ${activePanel === 'preprocessed' ? styles.active : ''}`}>
+              <div className={`${styles.panelHeader} ${styles.panelHeaderPreprocessed}`}>
+                <h3 className={`${styles.panelTitle} ${styles.panelTitlePreprocessed}`}>预处理后信号</h3>
+                <span className={`${styles.panelBadge} ${styles.badgePrimary}`}>
                   {currentMethodConfig.name}
                 </span>
               </div>
-              <div className="flex-1 overflow-auto p-4">
-                {preprocessedLoading && <div className="text-center py-8 text-gray-500">分析中...</div>}
-                {preprocessedError && <div className="text-center py-8 text-red-500">{preprocessedError}</div>}
+              <div className={styles.panelContent}>
+                {preprocessedLoading && <div className={styles.panelStatus}>分析中...</div>}
+                {preprocessedError && <div className={styles.panelError}>{preprocessedError}</div>}
                 {!preprocessedLoading && !preprocessedError && !preprocessedResults && (
-                  <div className="text-center py-8 text-gray-400">等待分析...</div>
+                  <div className={styles.panelStatus}>等待分析...</div>
                 )}
                 {!preprocessedLoading && !preprocessedError && preprocessedResults && (
                   analysisType === 'stats' ? (
@@ -548,6 +521,7 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
                       isLoading={false}
                       error={null}
                       onClose={() => {}}
+                      hideCloseButton
                     />
                   ) : (
                     <FrequencyView
@@ -555,6 +529,7 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
                       isLoading={false}
                       error={null}
                       onClose={() => {}}
+                      hideCloseButton
                     />
                   )
                 )}
@@ -563,36 +538,26 @@ export const AdvancedAnalysisModal: React.FC<AdvancedAnalysisModalProps> = ({
           </div>
 
           {/* 移动端面板切换 */}
-          <div className="md:hidden border-t border-gray-200 px-6 py-3 bg-gray-50 flex justify-center">
-            <div className="inline-flex rounded-md shadow-sm">
-              <button
-                onClick={() => setActivePanel('original')}
-                className={`px-4 py-2 text-sm font-medium rounded-l-md ${
-                  activePanel === 'original'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300'
-                }`}
-              >
-                原始信号
-              </button>
-              <button
-                onClick={() => setActivePanel('preprocessed')}
-                className={`px-4 py-2 text-sm font-medium rounded-r-md ${
-                  activePanel === 'preprocessed'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300'
-                }`}
-              >
-                预处理后
-              </button>
-            </div>
+          <div className={styles.mobileTabs}>
+            <button
+              onClick={() => setActivePanel('original')}
+              className={`${styles.mobileTab} ${activePanel === 'original' ? styles.active : ''}`}
+            >
+              原始信号
+            </button>
+            <button
+              onClick={() => setActivePanel('preprocessed')}
+              className={`${styles.mobileTab} ${activePanel === 'preprocessed' ? styles.active : ''}`}
+            >
+              预处理后
+            </button>
           </div>
 
           {/* 底部按钮 */}
-          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end gap-3">
+          <div className={styles.footer}>
             <button
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium"
+              className={`${styles.footerButton} ${styles.footerButtonSecondary}`}
             >
               关闭
             </button>

@@ -18,6 +18,8 @@ class PreprocessMethod:
     POLYNOMIAL_DETREND = "polynomial_detrend"
     HIGHPASS_FILTER = "highpass_filter"
     BANDPASS_FILTER = "bandpass_filter"
+    LOWPASS_FILTER = "lowpass_filter"
+    NOTCH_FILTER = "notch_filter"
     BASELINE_CORRECTION = "baseline_correction"
 
 
@@ -53,11 +55,22 @@ class SignalPreprocessor:
         elif method == PreprocessMethod.LINEAR_DETREND:
             return self.linear_detrend(data)
         elif method == PreprocessMethod.POLYNOMIAL_DETREND:
-            order = kwargs.get('order', 2)
+            order = int(kwargs.get('order', 2))
             return self.polynomial_detrend(data, order=order)
         elif method == PreprocessMethod.HIGHPASS_FILTER:
-            cutoff = kwargs.get('cutoff', 0.5)
+            cutoff = float(kwargs.get('cutoff', 0.5))
             return self.highpass_filter(data, cutoff=cutoff)
+        elif method == PreprocessMethod.BANDPASS_FILTER:
+            lowcut = float(kwargs.get('lowcut', 0.5))
+            highcut = float(kwargs.get('highcut', 50.0))
+            return self.bandpass_filter(data, lowcut=lowcut, highcut=highcut)
+        elif method == PreprocessMethod.LOWPASS_FILTER:
+            cutoff = float(kwargs.get('cutoff', 50.0))
+            return self.lowpass_filter(data, cutoff=cutoff)
+        elif method == PreprocessMethod.NOTCH_FILTER:
+            freq = float(kwargs.get('freq', 50.0))
+            quality = float(kwargs.get('quality', 30.0))
+            return self.notch_filter(data, freq=freq, quality=quality)
         elif method == PreprocessMethod.BASELINE_CORRECTION:
             return self.baseline_correction(data)
         else:
@@ -166,6 +179,33 @@ class SignalPreprocessor:
         # 使用 filtfilt 进行零相位滤波
         filtered = filtfilt(b, a, data)
         return filtered
+
+    def lowpass_filter(
+        self,
+        data: np.ndarray,
+        cutoff: float = 50.0,
+        order: int = 4
+    ) -> np.ndarray:
+        """低通滤波 - 去除高频噪声"""
+        from scipy.signal import butter, filtfilt
+
+        nyquist = self.sfreq / 2
+        normal_cutoff = cutoff / nyquist
+        b, a = butter(order, normal_cutoff, btype='low', analog=False)
+        return filtfilt(b, a, data)
+
+    def notch_filter(
+        self,
+        data: np.ndarray,
+        freq: float = 50.0,
+        quality: float = 30.0
+    ) -> np.ndarray:
+        """陷波滤波 - 去除工频干扰 (50Hz/60Hz)"""
+        from scipy.signal import iirnotch, filtfilt
+
+        w0 = freq / (self.sfreq / 2)
+        b, a = iirnotch(w0, quality)
+        return filtfilt(b, a, data)
 
     def baseline_correction(self, data: np.ndarray, window_size: int = None) -> np.ndarray:
         """

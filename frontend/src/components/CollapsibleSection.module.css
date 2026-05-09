@@ -1,0 +1,38 @@
+.section {
+  border-top: 1px solid #2a2a2a;
+}
+
+.header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  color: #9CA3AF;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: color 0.15s;
+}
+
+.header:hover {
+  color: #E5E7EB;
+}
+
+.title {
+  flex: 1;
+  text-align: left;
+}
+
+.arrow {
+  font-size: 10px;
+  color: #6B7280;
+}
+
+.content {
+  padding-bottom: 8px;
+}

@@ -10,6 +10,7 @@ from typing import List, Optional
 from app.services.edf_parser import EDFParser
 from app.services.file_manager import get_file_path
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,14 @@ class WaveformRequest(BaseModel):
     )
     start: float = Field(default=0.0, ge=0.0, description="Start time in seconds")
     duration: float = Field(default=10.0, gt=0.0, description="Duration in seconds")
+    highpass: Optional[float] = Field(
+        default=None, ge=0.01, le=100.0,
+        description="High-pass filter cutoff frequency (Hz)",
+    )
+    lowpass: Optional[float] = Field(
+        default=None, ge=1.0, le=500.0,
+        description="Low-pass filter cutoff frequency (Hz)",
+    )
 
     @validator("channels")
     def validate_channels(cls, v):
@@ -31,14 +40,50 @@ class WaveformRequest(BaseModel):
             raise ValueError("channels list cannot be empty")
         return v
 
+    @validator("lowpass")
+    def validate_filter_range(cls, v, values):
+        hp = values.get("highpass")
+        if hp is not None and v is not None and hp >= v:
+            raise ValueError("highpass must be less than lowpass")
+        return v
 
-def _get_waveform_data(file_path: str, start: float, duration: float, channels):
-    """Synchronous waveform data retrieval (runs in thread pool)."""
+
+def _apply_filter(data: list, sfreq: float, highpass: float | None, lowpass: float | None) -> list:
+    """Apply highpass/lowpass filtering to waveform data."""
+    from app.services.preprocessing import SignalPreprocessor
+
+    arr = np.array(data, dtype=float)
+    preprocessor = SignalPreprocessor(sfreq)
+
+    min_samples = 36  # 3 * order * 3 minimum for filtfilt
+    if arr.shape[1] < min_samples:
+        logger.warning(f"Signal too short ({arr.shape[1]} samples), skipping filter")
+        return data
+
+    for i in range(arr.shape[0]):
+        if highpass is not None:
+            arr[i] = preprocessor.highpass_filter(arr[i], cutoff=highpass)
+        if lowpass is not None:
+            arr[i] = preprocessor.lowpass_filter(arr[i], cutoff=lowpass)
+
+    return arr.tolist()
+
+
+def _get_waveform_data(
+    file_path: str, start: float, duration: float, channels,
+    highpass: float | None = None, lowpass: float | None = None,
+):
+    """Synchronous waveform data retrieval with optional filtering."""
     parser = EDFParser(file_path)
     parser.load()
-    return parser.get_waveform_chunk(
+    result = parser.get_waveform_chunk(
         start_time=start, duration=duration, channels=channels,
     )
+
+    if highpass is not None or lowpass is not None:
+        result["data"] = _apply_filter(result["data"], result["sfreq"], highpass, lowpass)
+
+    return result
 
 
 @router.post("/{file_id}")
@@ -59,6 +104,7 @@ async def get_waveform(file_id: str, request: WaveformRequest):
         waveform_data = await asyncio.to_thread(
             _get_waveform_data,
             file_path, request.start, request.duration, request.channels,
+            request.highpass, request.lowpass,
         )
         waveform_data["file_id"] = file_id
 
@@ -89,6 +135,14 @@ async def get_waveform_get(
     channels: Optional[str] = Query(
         None, description="Comma-separated channel indices"
     ),
+    highpass: Optional[float] = Query(
+        None, ge=0.01, le=100.0,
+        description="High-pass filter cutoff frequency (Hz)",
+    ),
+    lowpass: Optional[float] = Query(
+        None, ge=1.0, le=500.0,
+        description="Low-pass filter cutoff frequency (Hz)",
+    ),
 ):
     """
     Get waveform data (GET method for simpler testing)
@@ -107,11 +161,15 @@ async def get_waveform_get(
         if channels:
             channel_indices = [int(c.strip()) for c in channels.split(",")]
 
+        if highpass is not None and lowpass is not None and highpass >= lowpass:
+            raise HTTPException(400, "highpass must be less than lowpass")
+
         file_path = get_file_path(file_id)
 
         waveform_data = await asyncio.to_thread(
             _get_waveform_data,
             file_path, start, duration, channel_indices,
+            highpass, lowpass,
         )
         waveform_data["file_id"] = file_id
 

@@ -263,3 +263,187 @@ export const PREPROCESS_METHODS: Record<PreprocessMethod, {
     description: '使用移动平均去除基线',
   },
 };
+
+// ============================================
+// 异常检测类型定义
+// ============================================
+
+/**
+ * 异常波形类型
+ */
+export type AnomalyType =
+  | 'spike'           // 棘波
+  | 'sharp_wave'      // 尖波
+  | 'spike_and_slow'  // 棘慢复合波
+  | 'slow_wave'       // 慢波异常
+  | 'rhythmic';       // 节律异常
+
+/**
+ * 异常类型中文标签映射
+ */
+export const ANOMALY_LABELS: Record<AnomalyType, string> = {
+  spike: '棘波',
+  sharp_wave: '尖波',
+  spike_and_slow: '棘慢复合波',
+  slow_wave: '慢波异常',
+  rhythmic: '节律异常',
+};
+
+/**
+ * 异常类型颜色映射
+ */
+export const ANOMALY_COLORS: Record<AnomalyType, string> = {
+  spike: '#ff4444',
+  sharp_wave: '#ff8844',
+  spike_and_slow: '#ffcc44',
+  slow_wave: '#44aaff',
+  rhythmic: '#aa44ff',
+};
+
+/**
+ * 单个异常事件
+ */
+export interface AnomalyEvent {
+  onset: number;          // 开始时间 (秒)
+  duration: number;       // 持续时间 (秒)
+  type: AnomalyType;
+  confidence: number;     // 置信度 0-1
+  channels: string[];     // 相关通道
+  description: string;    // 中文描述
+}
+
+/**
+ * 通道异常检测结果
+ */
+export interface ChannelAnomalyResult {
+  channel: string;
+  anomalies: AnomalyEvent[];
+  total_events: number;   // 后端使用 snake_case
+  anomaly_rate: number;   // 异常占比
+}
+
+/**
+ * 异常检测 API 响应
+ */
+export interface AnomalyDetectionResponse {
+  file_id: string;
+  channels: ChannelAnomalyResult[];
+  total_anomalies: number;
+  processing_time: number;
+  sensitivity: number;
+}
+
+/**
+ * 异常检测 API 请求
+ */
+export interface AnomalyDetectionRequest {
+  start: number;
+  duration: number;
+  channels?: string[];
+  sensitivity?: number;  // 0.5=低, 1.0=中, 1.5=高
+  run_preprocess?: boolean;
+}
+
+// ============================================
+// 自动预处理类型定义
+// ============================================
+
+/**
+ * 重参考类型
+ */
+export type ReferenceType = 'average' | 'linked-mastoid';
+
+/**
+ * 自动预处理配置
+ */
+export interface AutoPreprocessConfig {
+  reference: ReferenceType;
+  notch_filter: boolean;
+  notch_freq: number;
+  notch_harmonics: boolean;
+  bandpass_enabled: boolean;
+  bandpass_low: number;
+  bandpass_high: number;
+  artifact_detection: boolean;
+  eog_threshold: number;
+  emg_threshold: number;
+  flat_threshold: number;
+  drift_threshold: number;
+  jump_threshold: number;
+  run_band_analysis: boolean;
+  run_anomaly_detection: boolean;
+  anomaly_sensitivity: number;
+}
+
+/**
+ * 默认自动预处理配置
+ */
+export const DEFAULT_AUTO_PREPROCESS_CONFIG: AutoPreprocessConfig = {
+  reference: 'average',
+  notch_filter: true,
+  notch_freq: 50.0,
+  notch_harmonics: true,
+  bandpass_enabled: true,
+  bandpass_low: 0.5,
+  bandpass_high: 50.0,
+  artifact_detection: true,
+  eog_threshold: 75.0,
+  emg_threshold: 50.0,
+  flat_threshold: 0.5,
+  drift_threshold: 100.0,
+  jump_threshold: 200.0,
+  run_band_analysis: false,
+  run_anomaly_detection: false,
+  anomaly_sensitivity: 1.0,
+};
+
+/**
+ * 伪迹类型
+ */
+export type ArtifactType = 'eog' | 'emg' | 'flat' | 'drift' | 'jump';
+
+/**
+ * 伪迹类型中文标签
+ */
+export const ARTIFACT_LABELS: Record<ArtifactType, string> = {
+  eog: '眼电伪迹',
+  emg: '肌电伪迹',
+  flat: '平坦信号',
+  drift: '信号漂移',
+  jump: '瞬时跳变',
+};
+
+/**
+ * 伪迹类型颜色
+ */
+export const ARTIFACT_COLORS: Record<ArtifactType, string> = {
+  eog: '#f59e0b',
+  emg: '#ef4444',
+  flat: '#6b7280',
+  drift: '#8b5cf6',
+  jump: '#ec4899',
+};
+
+/**
+ * 伪迹事件
+ */
+export interface ArtifactEvent {
+  start_time: number;
+  end_time: number;
+  artifact_type: ArtifactType;
+  channel: string | null;
+  severity: number;
+  description: string;
+}
+
+/**
+ * 自动预处理响应
+ */
+export interface AutoPreprocessResponse {
+  file_id: string;
+  processing_time: number;
+  channel_types: Record<string, string>;
+  preprocess_log: Record<string, unknown>;
+  artifacts: ArtifactEvent[];
+  artifact_summary: Record<string, number>;
+}

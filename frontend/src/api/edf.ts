@@ -7,6 +7,10 @@ import type {
   PSDResponse,
   ComprehensiveResponse,
   PreprocessConfig,
+  AnomalyDetectionRequest,
+  AnomalyDetectionResponse,
+  AutoPreprocessConfig,
+  AutoPreprocessResponse,
 } from '../types/analysis';
 
 const API_BASE = () => getApiUrl('');
@@ -50,16 +54,28 @@ export async function getMetadata(fileId: string): Promise<EDFMetadata> {
   return response.data;
 }
 
+export interface WaveformFilterParams {
+  highpass?: number;
+  lowpass?: number;
+}
+
 export async function getWaveform(
   fileId: string,
   start: number,
   duration: number,
-  channels?: number[]
+  channels?: number[],
+  filter?: WaveformFilterParams,
 ): Promise<WaveformData> {
   const channelsParam = channels ? channels.join(',') : undefined;
-  const response = await axios.get(`${API_BASE()}/waveform/${fileId}`, {
-    params: { start, duration, channels: channelsParam },
-  });
+  const params: Record<string, string | number | undefined> = {
+    start,
+    duration,
+    channels: channelsParam,
+  };
+  if (filter?.highpass !== undefined) params.highpass = filter.highpass;
+  if (filter?.lowpass !== undefined) params.lowpass = filter.lowpass;
+
+  const response = await axios.get(`${API_BASE()}/waveform/${fileId}`, { params });
 
   return response.data;
 }
@@ -218,6 +234,38 @@ export async function analyzeComprehensive(
  */
 export async function fetchDemoMetadata(): Promise<EDFMetadata> {
   const response = await axios.get(`${API_BASE()}/upload/dev/demo-metadata`);
+  return response.data;
+}
+
+/**
+ * 异常波形检测
+ */
+export async function detectAnomalies(
+  fileId: string,
+  request: AnomalyDetectionRequest
+): Promise<AnomalyDetectionResponse> {
+  const response = await axios.post(
+    `${API_BASE()}/anomaly_detection/${fileId}`,
+    request,
+    { timeout: 120_000 }
+  );
+
+  return response.data;
+}
+
+/**
+ * 自动预处理流水线
+ */
+export async function runAutoPreprocess(
+  fileId: string,
+  config: AutoPreprocessConfig
+): Promise<AutoPreprocessResponse> {
+  const response = await axios.post(
+    `${API_BASE()}/auto_preprocess/${fileId}`,
+    config,
+    { timeout: 180_000 } // 预处理可能需要较长时间
+  );
+
   return response.data;
 }
 

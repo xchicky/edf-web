@@ -4,14 +4,30 @@ import type { AnnotationSet, Annotation } from "../types/annotation";
 
 const API_BASE = () => getApiUrl("");
 
+/**
+ * 生成标注选项
+ */
+export interface GenerateAnnotationsOptions {
+  run_band_analysis?: boolean;
+  run_anomaly_detection?: boolean;
+  anomaly_sensitivity?: number;
+}
+
+/**
+ * 生成标注
+ * @param fileId 文件 ID
+ * @param options 生成选项
+ */
 export async function generateAnnotations(
-  fileId: string
+  fileId: string,
+  options?: GenerateAnnotationsOptions
 ): Promise<AnnotationSet> {
   const response = await axios.post(
     `${API_BASE()}/annotations/${fileId}/generate`,
     {
-      run_band_analysis: true,
-      run_anomaly_detection: true,
+      run_band_analysis: options?.run_band_analysis ?? true,
+      run_anomaly_detection: options?.run_anomaly_detection ?? true,
+      anomaly_sensitivity: options?.anomaly_sensitivity ?? 1.0,
     },
     { timeout: 120000 }
   );
@@ -61,4 +77,11 @@ export async function deleteUserAnnotation(
   annotationId: string
 ): Promise<void> {
   await axios.delete(`${API_BASE()}/annotations/${fileId}/user/${annotationId}`);
+}
+
+/**
+ * 清除文件标注缓存
+ */
+export async function clearAnnotationCache(fileId: string): Promise<void> {
+  await axios.delete(`${API_BASE()}/annotations/${fileId}/cache`);
 }

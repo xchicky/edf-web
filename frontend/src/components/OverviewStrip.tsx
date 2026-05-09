@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { getWaveformOverview } from '../api/edf';
 
 interface OverviewStripProps {
@@ -7,7 +7,7 @@ interface OverviewStripProps {
   windowDuration: number;
   totalDuration: number;
   channels?: number[];
-  onTimeChange?: (time: number) => void; // Unused: kept for backward compatibility
+  onTimeChange?: (time: number) => void;
 }
 
 interface OverviewData {
@@ -26,11 +26,12 @@ export const OverviewStrip: React.FC<OverviewStripProps> = ({
   windowDuration,
   totalDuration,
   channels,
-  onTimeChange: _onTimeChange, // Unused: kept for backward compatibility
+  onTimeChange,
 }) => {
   const [overviewData, setOverviewData] = useState<OverviewData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Load overview data
@@ -63,24 +64,18 @@ export const OverviewStrip: React.FC<OverviewStripProps> = ({
     const width = canvas.width;
     const height = canvas.height;
 
-    // Clear canvas
     ctx.clearRect(0, 0, width, height);
 
-    // Draw background
     ctx.fillStyle = '#F8F9FA';
     ctx.fillRect(0, 0, width, height);
 
-    // Calculate channel height
     const channelHeight = height / data.length;
 
-    // Draw waveform data
     data.forEach((channelData, channelIndex) => {
-      // Find min/max for scaling
       const minVal = Math.min(...channelData);
       const maxVal = Math.max(...channelData);
       const range = maxVal - minVal || 1;
 
-      // Draw waveform
       ctx.strokeStyle = '#0066CC';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -100,7 +95,6 @@ export const OverviewStrip: React.FC<OverviewStripProps> = ({
       ctx.stroke();
     });
 
-    // Draw current window overlay
     const windowStartX = (currentTime / totalDuration) * width;
     const windowWidth = (windowDuration / totalDuration) * width;
 
@@ -111,6 +105,33 @@ export const OverviewStrip: React.FC<OverviewStripProps> = ({
     ctx.lineWidth = 2;
     ctx.strokeRect(windowStartX, 0, windowWidth, height);
   }, [overviewData, currentTime, windowDuration, totalDuration]);
+
+  const getTimeFromCanvasX = useCallback((clientX: number): number => {
+    const canvas = canvasRef.current;
+    if (!canvas || totalDuration <= 0) return 0;
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const ratio = x / rect.width;
+    const time = ratio * totalDuration;
+    return Math.max(0, Math.min(totalDuration - windowDuration, time));
+  }, [totalDuration, windowDuration]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!onTimeChange) return;
+    setIsDragging(true);
+    const newTime = getTimeFromCanvasX(e.clientX);
+    onTimeChange(newTime);
+  }, [onTimeChange, getTimeFromCanvasX]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging || !onTimeChange) return;
+    const newTime = getTimeFromCanvasX(e.clientX);
+    onTimeChange(newTime);
+  }, [isDragging, onTimeChange, getTimeFromCanvasX]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
 
   if (isLoading) {
     return (
@@ -130,15 +151,19 @@ export const OverviewStrip: React.FC<OverviewStripProps> = ({
 
   if (!overviewData) return null;
 
-  const canvasHeight = Math.max(80, overviewData.data.length * 6);
+  const canvasHeight = Math.max(80, overviewData.data.length * 8);
 
   return (
-    <div className="overview-strip" style={{ maxHeight: '120px', overflowY: 'auto' }}>
+    <div className="overview-strip">
       <canvas
         ref={canvasRef}
         width={800}
         height={canvasHeight}
-        style={{ cursor: 'default' }}
+        style={{ cursor: onTimeChange ? 'pointer' : 'default' }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
       />
     </div>
   );

@@ -5,6 +5,9 @@
 }
 
 .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-weight: 600;
   font-size: 1rem;
   padding-bottom: 0.5rem;
@@ -12,10 +15,62 @@
   margin-bottom: 0.5rem;
 }
 
+.headerActions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.iconButton {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.iconButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .summary {
   font-size: 0.8rem;
   color: var(--text-secondary, #6b7280);
   margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.genOptions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.genOptionLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.genOptionLabel input[type="checkbox"] {
+  width: 0.75rem;
+  height: 0.75rem;
 }
 
 .emptyState {
@@ -278,4 +333,41 @@
 
 .cancelButton:hover {
   background: var(--bg-secondary, #f3f4f6);
+}
+
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.errorIcon {
+  font-size: 1.25rem;
+}
+
+.errorMessage {
+  color: #ef4444;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.retryButton {
+  padding: 0.375rem 0.75rem;
+  border: 1px solid #ef4444;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+}
+
+.retryButton:hover {
+  background: #fef2f2;
+}
+
+.retryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

@@ -1,0 +1,370 @@
+/* AdvancedAnalysisModal.module.css - 高级分析模态框样式 */
+
+/* 覆盖全局 stats-view 的 fixed 定位，在模态框内使用 static 定位 */
+.overlay :global(.stats-view) {
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+  z-index: auto !important;
+  min-width: unset !important;
+  max-width: unset !important;
+  max-height: unset !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.overlay :global(.freq-view) {
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+  z-index: auto !important;
+  min-width: unset !important;
+  max-width: unset !important;
+  max-height: unset !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  width: 95vw;
+  height: 90vh;
+  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #1a1a1a;
+  border-radius: 8px 8px 0 0;
+}
+
+.headerInfo {
+  flex: 1;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.selectionInfo {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin-top: 0.25rem;
+}
+
+.closeButton {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.5rem;
+  transition: all 0.15s;
+}
+
+.closeButton:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.configBar {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.75rem 1.5rem;
+  background: #ffffff;
+}
+
+.configRow {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.configItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.configLabel {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.configSelect {
+  padding: 0.375rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #374151;
+  background: #ffffff;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.configSelect:focus {
+  border-color: #0066cc;
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+}
+
+.paramSlider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.paramSlider input[type="range"] {
+  width: 6rem;
+  height: 0.25rem;
+  background: #e5e7eb;
+  border-radius: 4px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.paramSlider input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  background: #0066cc;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.paramValue {
+  font-size: 0.875rem;
+  color: #374151;
+  width: 2.5rem;
+}
+
+.typeSwitcher {
+  display: inline-flex;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border: 1px solid #d1d5db;
+}
+
+.typeButton {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.typeButton:first-child {
+  border-radius: 6px 0 0 6px;
+  border-right: 1px solid #d1d5db;
+}
+
+.typeButton:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.typeButton.active {
+  background: #0066cc;
+  color: #ffffff;
+}
+
+.typeButton:not(.active):hover {
+  background: #f3f4f6;
+}
+
+.panels {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel + .panel {
+  border-left: 1px solid #e5e7eb;
+}
+
+.panelHeader {
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.panelHeaderOriginal {
+  background: #f9fafb;
+}
+
+.panelHeaderPreprocessed {
+  background: #eff6ff;
+}
+
+.panelTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.panelTitlePreprocessed {
+  color: #1d4ed8;
+}
+
+.panelBadge {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+}
+
+.badgeDefault {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
+.badgePrimary {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.panelContent {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.panelStatus {
+  text-align: center;
+  padding: 2rem;
+  color: #6b7280;
+}
+
+.panelError {
+  text-align: center;
+  padding: 2rem;
+  color: #ef4444;
+}
+
+.mobileTabs {
+  display: none;
+  border-top: 1px solid #e5e7eb;
+  padding: 0.75rem 1.5rem;
+  background: #f9fafb;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .mobileTabs {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .panel {
+    display: none;
+  }
+
+  .panel.active {
+    display: flex;
+  }
+}
+
+.mobileTab {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mobileTab:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.mobileTab:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.mobileTab.active {
+  background: #0066cc;
+  color: #ffffff;
+  border-color: #0066cc;
+}
+
+.footer {
+  border-top: 1px solid #e5e7eb;
+  padding: 1rem 1.5rem;
+  background: #f9fafb;
+  border-radius: 0 0 8px 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.footerButton {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.footerButtonSecondary {
+  background: #ffffff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.footerButtonSecondary:hover {
+  background: #f3f4f6;
+}

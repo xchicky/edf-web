@@ -16,6 +16,8 @@ import {
   analyzeBandPower,
   analyzePSD,
   analyzeComprehensive,
+  detectAnomalies,
+  runAutoPreprocess,
   type EDFMetadata,
   type WaveformData,
 } from '../edf';
@@ -25,6 +27,7 @@ import type {
   BandPowerResponse,
   PSDResponse,
   ComprehensiveResponse,
+  AnomalyDetectionResponse,
 } from '../../types/analysis';
 
 // Mock axios
@@ -658,6 +661,170 @@ describe('EDF API', () => {
           preprocess: null,
         }
       );
+    });
+  });
+
+  describe('detectAnomalies', () => {
+    it('应该成功执行异常检测', async () => {
+      const fileId = 'test-file-id';
+      const request = {
+        start: 0,
+        duration: 10,
+        channels: ['Fp1', 'Fp2'],
+        sensitivity: 1.0,
+        run_preprocess: true,
+      };
+
+      const mockResponse: AnomalyDetectionResponse = {
+        file_id: fileId,
+        channels: [
+          {
+            channel: 'Fp1',
+            anomalies: [
+              {
+                onset: 1.5,
+                duration: 0.1,
+                type: 'spike',
+                confidence: 0.85,
+                channels: ['Fp1'],
+                description: '棘波检测',
+              },
+            ],
+            total_events: 1,
+            anomaly_rate: 0.01,
+          },
+        ],
+        total_anomalies: 1,
+        processing_time: 2.5,
+        sensitivity: 1.0,
+      };
+
+      mockedAxios.post.mockResolvedValue({ data: mockResponse });
+
+      const result = await detectAnomalies(fileId, request);
+
+      expect(result).toEqual(mockResponse);
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `http://localhost:8000/anomaly_detection/${fileId}`,
+        request,
+        { timeout: 120_000 }
+      );
+    });
+
+    it('应该使用默认参数执行异常检测', async () => {
+      const fileId = 'test-file-id';
+      const request = {
+        start: 0,
+        duration: 30,
+      };
+
+      const mockResponse: AnomalyDetectionResponse = {
+        file_id: fileId,
+        channels: [],
+        total_anomalies: 0,
+        processing_time: 1.5,
+        sensitivity: 1.0,
+      };
+
+      mockedAxios.post.mockResolvedValue({ data: mockResponse });
+
+      const result = await detectAnomalies(fileId, request);
+
+      expect(result).toEqual(mockResponse);
+      expect(result.total_anomalies).toBe(0);
+    });
+
+    it('应该处理异常检测失败', async () => {
+      const fileId = 'test-file-id';
+      const request = {
+        start: 0,
+        duration: 10,
+      };
+
+      const mockError = new Error('Detection failed');
+      mockedAxios.post.mockRejectedValue(mockError);
+
+      await expect(detectAnomalies(fileId, request)).rejects.toThrow('Detection failed');
+    });
+  });
+
+  describe('runAutoPreprocess', () => {
+    it('应该成功执行自动预处理', async () => {
+      const fileId = 'test-file-id';
+      const config = {
+        reference: 'average' as const,
+        notch_filter: true,
+        notch_freq: 50.0,
+        notch_harmonics: true,
+        bandpass_enabled: true,
+        bandpass_low: 0.5,
+        bandpass_high: 50.0,
+        artifact_detection: true,
+        eog_threshold: 75.0,
+        emg_threshold: 50.0,
+        flat_threshold: 0.5,
+        drift_threshold: 100.0,
+        jump_threshold: 200.0,
+        run_band_analysis: false,
+        run_anomaly_detection: false,
+        anomaly_sensitivity: 1.0,
+      };
+
+      const mockResponse = {
+        file_id: fileId,
+        processing_time: 5.23,
+        channel_types: { Fp1: 'eeg', Fp2: 'eeg' },
+        preprocess_log: {},
+        artifacts: [
+          {
+            start_time: 10.5,
+            end_time: 11.2,
+            artifact_type: 'eog',
+            channel: 'Fp1',
+            severity: 0.85,
+            description: 'EOG 伪迹',
+          },
+        ],
+        artifact_summary: { eog: 1 },
+      };
+
+      mockedAxios.post.mockResolvedValue({ data: mockResponse });
+
+      const result = await runAutoPreprocess(fileId, config);
+
+      expect(result).toEqual(mockResponse);
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `http://localhost:8000/auto_preprocess/${fileId}`,
+        config,
+        { timeout: 180_000 }
+      );
+    });
+
+    it('应该处理预处理失败', async () => {
+      const fileId = 'test-file-id';
+      const config = {
+        reference: 'average' as const,
+        notch_filter: true,
+        notch_freq: 50.0,
+        notch_harmonics: true,
+        bandpass_enabled: true,
+        bandpass_low: 0.5,
+        bandpass_high: 50.0,
+        artifact_detection: true,
+        eog_threshold: 75.0,
+        emg_threshold: 50.0,
+        flat_threshold: 0.5,
+        drift_threshold: 100.0,
+        jump_threshold: 200.0,
+        run_band_analysis: false,
+        run_anomaly_detection: false,
+        anomaly_sensitivity: 1.0,
+      };
+
+      const mockError = new Error('Preprocess failed');
+      mockedAxios.post.mockRejectedValue(mockError);
+
+      await expect(runAutoPreprocess(fileId, config)).rejects.toThrow('Preprocess failed');
     });
   });
 

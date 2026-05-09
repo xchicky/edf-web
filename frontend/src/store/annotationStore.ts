@@ -6,7 +6,9 @@ import {
   getAnnotations as apiGet,
   addUserAnnotation as apiAddUser,
   deleteUserAnnotation as apiDeleteUser,
+  clearAnnotationCache as apiClearCache,
 } from "../api/annotations";
+import type { GenerateAnnotationsOptions } from "../api/annotations";
 
 interface AnnotationStore {
   annotationSet: AnnotationSet | null;
@@ -15,7 +17,7 @@ interface AnnotationStore {
   visibilityFilter: Record<string, boolean>;
   selectedAnnotationId: string | null;
 
-  generateAnnotations: (fileId: string) => Promise<void>;
+  generateAnnotations: (fileId: string, options?: GenerateAnnotationsOptions) => Promise<void>;
   loadAnnotations: (
     fileId: string,
     params?: {
@@ -37,10 +39,13 @@ interface AnnotationStore {
     }
   ) => Promise<void>;
   deleteUserAnnotation: (fileId: string, annotationId: string) => Promise<void>;
+  clearCache: (fileId: string) => Promise<void>;
   toggleTypeVisibility: (type: string) => void;
   setAllVisibility: (visible: boolean) => void;
   setSelectedAnnotation: (id: string | null) => void;
   clearAnnotations: () => void;
+
+  addAnnotationsToStore: (annotations: Annotation[]) => void;
 
   getVisibleAnnotations: () => Annotation[];
   getAnnotationsForChannel: (channel: string) => Annotation[];
@@ -62,10 +67,10 @@ export const useAnnotationStore = create<AnnotationStore>((set, get) => ({
   visibilityFilter: defaultVisibility(),
   selectedAnnotationId: null,
 
-  generateAnnotations: async (fileId) => {
+  generateAnnotations: async (fileId, options) => {
     set({ isLoading: true, error: null });
     try {
-      const result = await apiGenerate(fileId);
+      const result = await apiGenerate(fileId, options);
       set({ annotationSet: result, isLoading: false });
     } catch (err) {
       set({ error: String(err), isLoading: false });
@@ -143,6 +148,36 @@ export const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 
   clearAnnotations: () =>
     set({ annotationSet: null, error: null, selectedAnnotationId: null }),
+
+  addAnnotationsToStore: (annotations) => {
+    set((state) => {
+      if (state.annotationSet) {
+        return {
+          annotationSet: {
+            ...state.annotationSet,
+            annotations: [...state.annotationSet.annotations, ...annotations],
+          },
+        };
+      }
+      return {
+        annotationSet: {
+          file_id: '',
+          annotations,
+          summary: {},
+          generated_at: new Date().toISOString(),
+        },
+      };
+    });
+  },
+
+  clearCache: async (fileId) => {
+    try {
+      await apiClearCache(fileId);
+      set({ annotationSet: null });
+    } catch (err) {
+      set({ error: String(err) });
+    }
+  },
 
   getVisibleAnnotations: () => {
     const state = get();

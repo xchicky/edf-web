@@ -1,5 +1,4 @@
 // edf-web v1.0
-import { useDropzone } from 'react-dropzone';
 import React, { useEffect, useCallback, useState } from 'react';
 import debounce from 'lodash.debounce';
 import { uploadEDF, getWaveform, calculateSignals } from './api/edf';
@@ -18,16 +17,16 @@ import { FrequencyView } from './components/FrequencyView';
 
 import { OverviewStrip } from './components/OverviewStrip';
 import { TimeAxis } from './components/TimeAxis';
-import { TimeScrubber } from './components/TimeScrubber';
 import { AmplitudeAxis } from './components/AmplitudeAxis';
 import { ResolutionIndicator } from './components/ResolutionIndicator';
 import { InteractionHint } from './components/InteractionHint';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { AnnotationPanel } from './components/AnnotationPanel';
-import { PreprocessSelector } from './components/PreprocessSelector';
-import { SelectionInfo } from './components/SelectionInfo';
-import { ZoomIndicator } from './components/ZoomIndicator';
-import { AdvancedAnalysisModal } from './components/AdvancedAnalysisModal';
+import { PipelinePanel } from './components/PipelinePanel';
+import { AnomalyDetectionPanel } from './components/AnomalyDetectionPanel';
+import { AutoPreprocessPanel } from './components/AutoPreprocessPanel';
+import { TopToolbar } from './components/TopToolbar';
+import { CollapsibleSection } from './components/CollapsibleSection';
 import './App.css';
 
 function App() {
@@ -40,8 +39,9 @@ function App() {
     currentTime,
     windowDuration,
     amplitudeScale,
+    tcValue,
+    hfValue,
     isPlaying,
-    bookmarks,
     signals,
     signalData,
     selectionStart,
@@ -70,11 +70,9 @@ function App() {
     deselectAllChannels,
     setWindowDuration,
     setAmplitudeScale,
+    setTcValue,
+    setHfValue,
     setIsPlaying,
-    setBookmarks,
-    addBookmark,
-    removeBookmark,
-    jumpToBookmark,
     addSignal,
     updateSignal,
     deleteSignal,
@@ -86,9 +84,8 @@ function App() {
     runAnalysis,
     clearAnalysisResults,
     clearSelection,
+    setSelectionChannel,
     setSelectedAnalysisType,
-    preprocessConfig,
-    setPreprocessConfig,
     // 模式管理方法
     loadModes,
     applyMode,
@@ -111,9 +108,6 @@ function App() {
   // 模式编辑器状态
   const [isModeEditorOpen, setIsModeEditorOpen] = useState(false);
   const [editingMode, setEditingMode] = useState<any>(null);
-
-  // 高级分析模态框状态
-  const [isAdvancedAnalysisOpen, setIsAdvancedAnalysisOpen] = useState(false);
 
   // Track actual canvas width to match WaveformCanvas and TimeAxis
   const waveformContainerRef = React.useRef<HTMLDivElement>(null);
@@ -160,60 +154,56 @@ function App() {
     return () => clearTimeout(timer);
   }, [isLeftSidebarCollapsed, isRightSidebarCollapsed]);
 
-  const { getRootProps, getInputProps } = useDropzone({
-    accept: { 'application/octet-stream': ['.edf'] },
-    maxFiles: 1,
-    disabled: isLoading,
-    onDrop: async (files) => {
-      if (!files || files.length === 0) return;
-      reset();
-      setLoading(true);
-      setError(null);
+  // File input ref for toolbar upload button
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-      try {
-        const result = await uploadEDF(files[0]);
-        setMetadata(result as any);
+  const handleFileUpload = async (file: File) => {
+    reset();
+    setLoading(true);
+    setError(null);
 
-        // Generate annotations in background (non-blocking)
-        generateAnnotations(result.file_id).catch(() => {});
+    try {
+      const result = await uploadEDF(file);
+      setMetadata(result as any);
 
-        // Load modes on file load
-        loadModes();
+      generateAnnotations(result.file_id).catch(() => {});
+      loadModes();
+      loadSignalsFromStorage(result.file_id);
 
-        // Load saved signals for this file
-        loadSignalsFromStorage(result.file_id);
-
-        // Auto-select first 10 channels
-        const initialChannels = Array.from({ length: Math.min(10, result.n_channels) }, (_, i) => i);
-        const waveformData = await getWaveform(result.file_id, 0, windowDuration, initialChannels);
-        setWaveform(waveformData);
-      } catch (err: any) {
-        // Normalize error to string (handle FastAPI 422 validation arrays)
-        let errorMessage = err.message || 'Upload failed';
-        if (err.response?.data?.detail) {
-          const detail = err.response.data.detail;
-          if (Array.isArray(detail)) {
-            errorMessage = detail.map((e: any) => e.msg).join(', ');
-          } else if (typeof detail === 'string') {
-            errorMessage = detail;
-          }
+      const initialChannels = Array.from({ length: Math.min(10, result.n_channels) }, (_, i) => i);
+      const waveformData = await getWaveform(result.file_id, 0, windowDuration, initialChannels);
+      setWaveform(waveformData);
+    } catch (err: any) {
+      let errorMessage = err.message || 'Upload failed';
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        if (Array.isArray(detail)) {
+          errorMessage = detail.map((e: any) => e.msg).join(', ');
+        } else if (typeof detail === 'string') {
+          errorMessage = detail;
         }
-        setError(errorMessage);
-      } finally {
-        setLoading(false);
       }
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
     }
-  });
+  };
 
   const handleLoadWaveform = async () => {
     if (!metadata) return;
 
     setLoading(true);
     try {
-      const waveformData = await getWaveform(metadata.file_id, currentTime, windowDuration, selectedChannels);
+      const filter: { highpass?: number; lowpass?: number } = {};
+      if (tcValue !== null) filter.highpass = 1 / (2 * Math.PI * tcValue);
+      if (hfValue !== null) filter.lowpass = hfValue;
+
+      const waveformData = await getWaveform(
+        metadata.file_id, currentTime, windowDuration, selectedChannels,
+        Object.keys(filter).length > 0 ? filter : undefined,
+      );
       setWaveform(waveformData);
     } catch (err: any) {
-      // Normalize error to string (handle FastAPI 422 validation arrays)
       let errorMessage = 'Failed to load waveform';
       if (err.response?.data?.detail) {
         const detail = err.response.data.detail;
@@ -231,7 +221,6 @@ function App() {
     }
   };
 
-  // Load derived signals for the current time window
   const handleLoadDerivedSignals = async () => {
     if (!metadata) return;
 
@@ -282,7 +271,7 @@ function App() {
         handleLoadWaveform();
       }
     }, 300),
-    [metadata, currentTime, windowDuration, selectedChannels]
+    [metadata, currentTime, windowDuration, selectedChannels, tcValue, hfValue]
   );
 
   // Auto-load waveform when relevant state changes
@@ -294,7 +283,7 @@ function App() {
     return () => {
       debouncedLoadWaveform.cancel();
     };
-  }, [currentTime, windowDuration, selectedChannels, metadata, debouncedLoadWaveform]);
+  }, [currentTime, windowDuration, selectedChannels, metadata, tcValue, hfValue, debouncedLoadWaveform]);
 
   // Debounced version of handleLoadDerivedSignals
   const debouncedLoadDerivedSignals = useCallback(
@@ -482,47 +471,6 @@ function App() {
     setEditingMode(null);
   };
 
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const [timeJumpInput, setTimeJumpInput] = useState('');
-
-  const parseTimeJump = (input: string): number => {
-    const parts = input.split(':');
-    if (parts.length === 2) {
-      const mins = parseInt(parts[0], 10);
-      const secs = parseFloat(parts[1]);
-      if (!isNaN(mins) && !isNaN(secs)) {
-        return mins * 60 + secs;
-      }
-    }
-    return -1;
-  };
-
-  // Load bookmarks from localStorage on mount
-  useEffect(() => {
-    const savedBookmarks = localStorage.getItem('edf-bookmarks');
-    if (savedBookmarks) {
-      try {
-        setBookmarks(JSON.parse(savedBookmarks));
-      } catch (e) {
-        console.error('Failed to parse bookmarks from localStorage:', e);
-      }
-    }
-  }, [setBookmarks]);
-
-  // Save bookmarks to localStorage when they change
-  useEffect(() => {
-    if (bookmarks.length > 0) {
-      localStorage.setItem('edf-bookmarks', JSON.stringify(bookmarks));
-    } else {
-      localStorage.removeItem('edf-bookmarks');
-    }
-  }, [bookmarks]);
-
   const handlePlayPause = () => {
     setIsPlaying(!isPlaying);
   };
@@ -533,18 +481,6 @@ function App() {
 
   const handleZoomOut = () => {
     setWindowDuration(Math.min(60, windowDuration + 5));
-  };
-
-  const handleAmplitudeIn = () => {
-    setAmplitudeScale(Math.min(10, amplitudeScale + 0.5));
-  };
-
-  const handleAmplitudeOut = () => {
-    setAmplitudeScale(Math.max(0.1, amplitudeScale - 0.5));
-  };
-
-  const handleAmplitudeChange = (scale: number) => {
-    setAmplitudeScale(scale);
   };
 
   // Keyboard shortcuts
@@ -661,24 +597,37 @@ function App() {
   return (
     <div className="app">
       <header className="header">
-        <div className="header-left">
-          <h1>EDF Viewer</h1>
-          <span className="subtitle">Professional EEG Data Visualization</span>
-        </div>
-        <div className="header-right">
-          <button
-            className="icon-button"
-            onClick={() => {
-              const helpTooltip = document.querySelector('.keyboard-help-tooltip');
-              if (helpTooltip) {
-                helpTooltip.classList.toggle('visible');
-              }
-            }}
-            title="Keyboard Shortcuts (?)"
-          >
-            ⌨️
-          </button>
-        </div>
+        <TopToolbar
+          metadata={metadata}
+          isLoading={isLoading}
+          error={error}
+          amplitudeScale={amplitudeScale}
+          tcValue={tcValue}
+          hfValue={hfValue}
+          onAmplitudeChange={setAmplitudeScale}
+          onTcChange={setTcValue}
+          onHfChange={setHfValue}
+          onUploadClick={() => fileInputRef.current?.click()}
+          onToggleHelp={() => {
+            const helpTooltip = document.querySelector('.keyboard-help-tooltip');
+            if (helpTooltip) {
+              helpTooltip.classList.toggle('visible');
+            }
+          }}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".edf"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            handleFileUpload(file).finally(() => {
+              e.target.value = '';
+            });
+          }}
+        />
       </header>
 
       <div className="keyboard-help-tooltip">
@@ -717,6 +666,7 @@ function App() {
       </div>
 
       <main className="main-layout">
+        {/* Left Sidebar: ModeSelector, ChannelSelector, SignalList, then Time/Navigation */}
         <section className={`left-sidebar ${isLeftSidebarCollapsed ? 'collapsed' : ''}`}>
           <button
             className="sidebar-toggle"
@@ -727,272 +677,9 @@ function App() {
             {isLeftSidebarCollapsed ? '→' : '←'}
           </button>
 
-          <div {...getRootProps()} className={`dropzone ${isLoading ? 'loading' : ''}`}>
-            <input {...getInputProps()} />
-            <p>Drag & drop EDF file here<br/>拖放 EDF 文件到此处</p>
-          </div>
-
           {error && (
             <div className="error">{error}</div>
           )}
-
-          {metadata && (
-            <div className="metadata">
-              <h3>File Info</h3>
-              <div className="info-item">
-                <span className="label">File:</span>
-                <span className="value">{metadata.filename}</span>
-              </div>
-              <div className="info-item">
-                <span className="label">Size:</span>
-                <span className="value">{metadata.file_size_mb} MB</span>
-              </div>
-              <div className="info-item">
-                <span className="label">Channels:</span>
-                <span className="value">{metadata.n_channels}</span>
-              </div>
-              <div className="info-item">
-                <span className="label">Duration:</span>
-                <span className="value">{metadata.duration_minutes.toFixed(1)} min</span>
-              </div>
-              <div className="info-item">
-                <span className="label">Sampling:</span>
-                <span className="value">{metadata.sfreq} Hz</span>
-              </div>
-              <div className="info-item">
-                <span className="label">Date:</span>
-                <span className="value">{metadata.meas_date?.split('T')[0]}</span>
-              </div>
-              <div className="info-item">
-                <span className="label">Patient ID:</span>
-                <span className="value">{metadata.patient_info.patient_id}</span>
-              </div>
-            </div>
-          )}
-
-          {metadata && (
-            <div className="controls">
-              <h3>Time Window</h3>
-
-              <label>Quick Zoom:</label>
-              <div className="window-presets">
-                <button
-                  onClick={() => setWindowDuration(1)}
-                  className={windowDuration === 1 ? 'active' : ''}
-                >
-                  1s
-                </button>
-                <button
-                  onClick={() => setWindowDuration(5)}
-                  className={windowDuration === 5 ? 'active' : ''}
-                >
-                  5s
-                </button>
-                <button
-                  onClick={() => setWindowDuration(10)}
-                  className={windowDuration === 10 ? 'active' : ''}
-                >
-                  10s
-                </button>
-                <button
-                  onClick={() => setWindowDuration(30)}
-                  className={windowDuration === 30 ? 'active' : ''}
-                >
-                  30s
-                </button>
-                <button
-                  onClick={() => setWindowDuration(60)}
-                  className={windowDuration === 60 ? 'active' : ''}
-                >
-                  1m
-                </button>
-                <button
-                  onClick={() => setWindowDuration(300)}
-                  className={windowDuration === 300 ? 'active' : ''}
-                >
-                  5m
-                </button>
-              </div>
-
-              <TimeScrubber
-                currentTime={currentTime}
-                totalDuration={metadata.duration_seconds}
-                windowDuration={windowDuration}
-                onTimeChange={setCurrentTime}
-              />
-
-              <label>
-                Start Time (s):
-                <div className="input-with-buttons">
-                  <button onClick={() => setCurrentTime(Math.max(0, currentTime - 10))} disabled={currentTime === 0}>
-                    -10s
-                  </button>
-                  <input
-                    type="number"
-                    value={currentTime}
-                    onChange={(e) => setCurrentTime(Number(e.target.value))}
-                    min={0}
-                    max={Math.floor(metadata.duration_seconds - windowDuration)}
-                    step={1}
-                  />
-                  <button onClick={() => setCurrentTime(Math.min(metadata.duration_seconds - windowDuration, currentTime + 10))} disabled={currentTime >= metadata.duration_seconds - windowDuration}>
-                    +10s
-                  </button>
-                </div>
-              </label>
-
-              <button onClick={handleLoadWaveform} disabled={isLoading} className="primary-button">
-                {isLoading ? 'Loading...' : 'Load Waveform'}
-              </button>
-
-              <PreprocessSelector
-                config={preprocessConfig}
-                onConfigChange={setPreprocessConfig}
-                disabled={!metadata}
-              />
-            </div>
-          )}
-
-          {metadata && (
-            <div className="controls">
-              <h3>Navigation</h3>
-
-              <label>Time Jump (MM:SS):</label>
-              <div className="input-with-buttons">
-                <input
-                  type="text"
-                  value={timeJumpInput}
-                  onChange={(e) => setTimeJumpInput(e.target.value)}
-                  placeholder="00:00"
-                />
-                <button onClick={() => {
-                  const time = parseTimeJump(timeJumpInput);
-                  if (time >= 0 && time <= metadata.duration_seconds) {
-                    setCurrentTime(time);
-                    setTimeJumpInput('');
-                  }
-                }}>
-                  Jump
-                </button>
-              </div>
-
-              <label>Quick Jump:</label>
-              <div className="button-group">
-                <button onClick={() => setCurrentTime(0)}>Start</button>
-                <button onClick={() => setCurrentTime(metadata.duration_seconds / 2)}>Middle</button>
-                <button onClick={() => setCurrentTime(Math.max(0, metadata.duration_seconds - windowDuration))}>End</button>
-              </div>
-
-              <label>Bookmarks:</label>
-              <div className="input-with-buttons">
-                <input
-                  type="text"
-                  placeholder="Bookmark label"
-                  id="bookmark-label-input"
-                />
-                <button onClick={() => {
-                  const input = document.getElementById('bookmark-label-input') as HTMLInputElement;
-                  const label = input?.value || `Bookmark ${bookmarks.length + 1}`;
-                  addBookmark(label, currentTime);
-                  if (input) input.value = '';
-                }}>
-                  Add
-                </button>
-              </div>
-
-              {bookmarks.length > 0 && (
-                <div className="bookmarks-list">
-                  {bookmarks.map((bookmark) => (
-                    <div key={bookmark.id} className="bookmark-item">
-                      <span className="bookmark-label">{bookmark.label}</span>
-                      <span className="bookmark-time">{formatTime(bookmark.time)}</span>
-                      <button onClick={() => jumpToBookmark(bookmark.time)}>Go</button>
-                      <button onClick={() => removeBookmark(bookmark.id)}>✕</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-
-        <section className="waveform-display">
-          {waveform && (
-            <>
-              <div className="waveform-display-container" ref={waveformContainerRef}>
-                <div className="amplitude-axis-wrapper">
-                <AmplitudeAxis
-                  channelHeight={channelHeight}
-                  numChannels={actualNumChannels}
-                  amplitudeScale={amplitudeScale}
-                  unit="µV"
-                />
-                </div>
-                <WaveformCanvas
-                  waveformData={mergedWaveformData || waveform}
-                  channelColors={channelColors}
-                  currentTime={currentTime}
-                  windowDuration={windowDuration}
-                  amplitudeScale={amplitudeScale}
-                  onTimeChange={setCurrentTime}
-                  onAmplitudeChange={setAmplitudeScale}
-                  onHeightChange={setCanvasHeight}
-                  onSelectionChange={handleSelectionChange}
-                  selectionStart={selectionStart}
-                  selectionEnd={selectionEnd}
-                  isSelecting={isSelecting}
-                  hasSelection={hasSelection}
-                />
-              </div>
-
-              <div className="time-axis-wrapper">
-                <TimeAxis
-                  duration={windowDuration}
-                  startTime={currentTime}
-                  width={canvasWidth}
-                  pixelsPerSecond={pixelsPerSecond}
-                />
-              </div>
-
-              <OverviewStrip
-                fileId={metadata?.file_id || ''}
-                currentTime={currentTime}
-                windowDuration={windowDuration}
-                totalDuration={metadata?.duration_seconds || 0}
-                onTimeChange={setCurrentTime}
-                channels={selectedChannels}
-              />
-
-              {metadata && (
-                <ZoomIndicator
-                  timeZoom={windowDuration}
-                  amplitudeZoom={amplitudeScale}
-                  maxTimeZoom={60}
-                  maxAmplitudeZoom={10}
-                />
-              )}
-            </>
-          )}
-
-          {metadata && hasSelection && selectionStart !== null && selectionEnd !== null && (
-            <SelectionInfo
-              selectionStart={selectionStart}
-              selectionEnd={selectionEnd}
-              waveformData={waveform}
-              onClose={clearSelection}
-            />
-          )}
-        </section>
-
-        <section className={`right-sidebar ${isRightSidebarCollapsed ? 'collapsed' : ''}`}>
-          <button
-            className="sidebar-toggle"
-            onClick={toggleRightSidebar}
-            title={isRightSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
-            aria-label={isRightSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
-          >
-            {isRightSidebarCollapsed ? '←' : '→'}
-          </button>
 
           {metadata && (
             <>
@@ -1017,12 +704,135 @@ function App() {
                 onToggle={handleToggleSignal}
                 onAddNew={handleAddNewSignal}
               />
+            </>
+          )}
+        </section>
 
+        {/* Center: waveform display */}
+        <section className="waveform-display">
+          {waveform && (
+            <>
+              <div className="waveform-display-container" ref={waveformContainerRef}>
+                <div className="amplitude-axis-wrapper">
+                <AmplitudeAxis
+                  channelHeight={channelHeight}
+                  numChannels={actualNumChannels}
+                  amplitudeScale={amplitudeScale}
+                  unit="µV"
+                />
+                </div>
+                <WaveformCanvas
+                  waveformData={mergedWaveformData || waveform}
+                  channelColors={channelColors}
+                  currentTime={currentTime}
+                  windowDuration={windowDuration}
+                  amplitudeScale={amplitudeScale}
+                  onTimeChange={setCurrentTime}
+                  onAmplitudeChange={setAmplitudeScale}
+                  onHeightChange={setCanvasHeight}
+                  onSelectionChange={handleSelectionChange}
+                  onSelectionChannelChange={setSelectionChannel}
+                  selectionStart={selectionStart}
+                  selectionEnd={selectionEnd}
+                  isSelecting={isSelecting}
+                  hasSelection={hasSelection}
+                />
+              </div>
+
+              <div className="time-axis-wrapper">
+                <TimeAxis
+                  duration={windowDuration}
+                  startTime={currentTime}
+                  width={canvasWidth}
+                  pixelsPerSecond={pixelsPerSecond}
+                />
+              </div>
+
+              <OverviewStrip
+                fileId={metadata?.file_id || ''}
+                currentTime={currentTime}
+                windowDuration={windowDuration}
+                totalDuration={metadata?.duration_seconds || 0}
+                onTimeChange={setCurrentTime}
+                channels={selectedChannels}
+              />
+            </>
+          )}
+        </section>
+
+        {/* Right Sidebar: AnnotationPanel, PipelinePanel, inline analysis, detection panels */}
+        <section className={`right-sidebar ${isRightSidebarCollapsed ? 'collapsed' : ''}`}>
+          <button
+            className="sidebar-toggle"
+            onClick={toggleRightSidebar}
+            title={isRightSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+            aria-label={isRightSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+          >
+            {isRightSidebarCollapsed ? '←' : '→'}
+          </button>
+
+          {metadata && (
+            <>
               <AnnotationPanel
                 fileId={metadata?.file_id || null}
                 channels={metadata?.channel_names || []}
                 onJumpToTime={(time) => setCurrentTime(time)}
               />
+
+              <PipelinePanel />
+
+              {(hasSelection || isAnalysisLoading || analysisError) && (
+                <div className="analysis-section">
+                  <div className="analysis-section-header">
+                    <h3>选区分析</h3>
+                    <button onClick={clearSelection} className="analysis-section-close">✕</button>
+                  </div>
+                  <div className="analysis-type-tabs">
+                    <button
+                      className={selectedAnalysisType === 'stats' ? 'active' : ''}
+                      onClick={() => setSelectedAnalysisType('stats')}
+                    >
+                      时域统计
+                    </button>
+                    <button
+                      className={selectedAnalysisType === 'frequency' ? 'active' : ''}
+                      onClick={() => setSelectedAnalysisType('frequency')}
+                    >
+                      频带功率
+                    </button>
+                  </div>
+                  {selectedAnalysisType === 'stats' ? (
+                    <StatsView
+                      results={analysisResults}
+                      isLoading={isAnalysisLoading}
+                      error={analysisError}
+                      onClose={clearSelection}
+                    />
+                  ) : (
+                    <FrequencyView
+                      results={analysisResults}
+                      isLoading={isAnalysisLoading}
+                      error={analysisError}
+                      onClose={clearSelection}
+                    />
+                  )}
+                </div>
+              )}
+
+              <CollapsibleSection title="异常检测">
+                <AnomalyDetectionPanel
+                  fileId={metadata?.file_id || null}
+                  channels={metadata?.channel_names || []}
+                  duration={metadata?.duration_seconds || 0}
+                  onJumpToTime={(time) => setCurrentTime(time)}
+                />
+              </CollapsibleSection>
+              <CollapsibleSection title="自动预处理">
+                <AutoPreprocessPanel
+                  fileId={metadata?.file_id || null}
+                  channelNames={metadata?.channel_names || []}
+                />
+              </CollapsibleSection>
             </>
           )}
         </section>
@@ -1033,7 +843,6 @@ function App() {
           currentTime={currentTime}
           duration={windowDuration}
           totalDuration={metadata.duration_seconds}
-          amplitudeScale={amplitudeScale}
           isPlaying={isPlaying}
           onPlayPause={handlePlayPause}
           onStop={() => {
@@ -1043,9 +852,6 @@ function App() {
           onTimeChange={setCurrentTime}
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
-          onAmplitudeIn={handleAmplitudeIn}
-          onAmplitudeOut={handleAmplitudeOut}
-          onAmplitudeChange={handleAmplitudeChange}
         />
       )}
 
@@ -1095,65 +901,6 @@ function App() {
         onCancel={handleCancelModeEdit}
         onDelete={handleDeleteMode}
       />
-
-      {/* 高级分析模态框 */}
-      {metadata && hasSelection && selectionStart !== null && selectionEnd !== null && (
-        <AdvancedAnalysisModal
-          isOpen={isAdvancedAnalysisOpen}
-          fileId={metadata.file_id}
-          selectionStart={selectionStart}
-          selectionEnd={selectionEnd}
-          channelNames={selectedChannels.map(i => metadata.channel_names[i]).filter(Boolean)}
-          initialAnalysisType={selectedAnalysisType}
-          initialPreprocessConfig={preprocessConfig}
-          onClose={() => setIsAdvancedAnalysisOpen(false)}
-        />
-      )}
-
-      {/* 分析结果视图 */}
-      {(hasSelection || isAnalysisLoading || analysisError) && (
-        <>
-          {/* 分析类型切换器 */}
-          <div className="analysis-type-switcher">
-            <button
-              className={`analysis-type-btn ${selectedAnalysisType === 'stats' ? 'active' : ''}`}
-              onClick={() => setSelectedAnalysisType('stats')}
-            >
-              时域统计
-            </button>
-            <button
-              className={`analysis-type-btn ${selectedAnalysisType === 'frequency' ? 'active' : ''}`}
-              onClick={() => setSelectedAnalysisType('frequency')}
-            >
-              频带功率
-            </button>
-            <button
-              className="analysis-type-btn"
-              onClick={() => setIsAdvancedAnalysisOpen(true)}
-              title="高级分析: 对比原始信号与预处理后信号的分析结果"
-            >
-              高级分析
-            </button>
-          </div>
-
-          {/* 根据类型显示对应的分析视图 */}
-          {selectedAnalysisType === 'stats' ? (
-            <StatsView
-              results={analysisResults}
-              isLoading={isAnalysisLoading}
-              error={analysisError}
-              onClose={clearSelection}
-            />
-          ) : (
-            <FrequencyView
-              results={analysisResults}
-              isLoading={isAnalysisLoading}
-              error={analysisError}
-              onClose={clearSelection}
-            />
-          )}
-        </>
-      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import type { AnalysisResult } from '../types/analysis';
 import { EEG_BANDS, type EEGBandName } from '../types/analysis';
 
@@ -7,6 +7,7 @@ interface FrequencyViewProps {
   isLoading: boolean;
   error: string | null;
   onClose: () => void;
+  hideCloseButton?: boolean;
 }
 
 const formatTime = (seconds: number): string => {
@@ -33,60 +34,13 @@ const formatPercent = (value: number): string => {
   return `${(value * 100).toFixed(1)}%`;
 };
 
-// 计算跨通道平均功率
-interface BandPowerSummary {
-  absolute: number;
-  relative: number;
-  count: number;
-}
-
 export const FrequencyView: React.FC<FrequencyViewProps> = ({
   results,
   isLoading,
   error,
   onClose,
+  hideCloseButton = false,
 }) => {
-  // 计算汇总统计（跨通道平均）
-  const bandSummary = useMemo<Record<EEGBandName, BandPowerSummary>>(() => {
-    if (!results?.frequency?.bandPowers) {
-      return {
-        delta: { absolute: 0, relative: 0, count: 0 },
-        theta: { absolute: 0, relative: 0, count: 0 },
-        alpha: { absolute: 0, relative: 0, count: 0 },
-        beta: { absolute: 0, relative: 0, count: 0 },
-        gamma: { absolute: 0, relative: 0, count: 0 },
-      };
-    }
-
-    const summary: Record<string, { absolute: number; relative: number; count: number }> = {};
-
-    // 初始化
-    for (const band of Object.keys(EEG_BANDS)) {
-      summary[band] = { absolute: 0, relative: 0, count: 0 };
-    }
-
-    // 累加各通道数据
-    for (const channelData of Object.values(results.frequency.bandPowers)) {
-      for (const [band, data] of Object.entries(channelData)) {
-        if (summary[band]) {
-          summary[band].absolute += data.absolute;
-          summary[band].relative += data.relative;
-          summary[band].count += 1;
-        }
-      }
-    }
-
-    // 计算平均
-    for (const band of Object.keys(summary)) {
-      if (summary[band].count > 0) {
-        summary[band].absolute /= summary[band].count;
-        summary[band].relative /= summary[band].count;
-      }
-    }
-
-    return summary as Record<EEGBandName, BandPowerSummary>;
-  }, [results]);
-
   if (isLoading) {
     return (
       <div className="stats-view">
@@ -105,9 +59,11 @@ export const FrequencyView: React.FC<FrequencyViewProps> = ({
       <div className="stats-view">
         <div className="stats-view-header">
           <h4>分析错误</h4>
-          <button className="stats-view-close" onClick={onClose} aria-label="关闭">
-            ×
-          </button>
+          {!hideCloseButton && (
+            <button className="stats-view-close" onClick={onClose} aria-label="关闭">
+              ×
+            </button>
+          )}
         </div>
         <div className="stats-view-content">
           <div className="stats-error">{error}</div>
@@ -127,9 +83,11 @@ export const FrequencyView: React.FC<FrequencyViewProps> = ({
     <div className="stats-view">
       <div className="stats-view-header">
         <h4>频带功率分析</h4>
-        <button className="stats-view-close" onClick={onClose} aria-label="关闭">
-          ×
-        </button>
+        {!hideCloseButton && (
+          <button className="stats-view-close" onClick={onClose} aria-label="关闭">
+            ×
+          </button>
+        )}
       </div>
       <div className="stats-view-content">
         {/* 选区信息 */}
@@ -150,57 +108,18 @@ export const FrequencyView: React.FC<FrequencyViewProps> = ({
             </div>
             <div className="stats-info-item">
               <span className="stats-info-label">通道:</span>
-              <span className="stats-info-value">{channels.length}</span>
+              <span className="stats-info-value">{channels.join(', ')}</span>
             </div>
           </div>
         </div>
 
-        {/* 汇总频带功率（跨通道平均） */}
+        {/* 通道频带功率 */}
         <div className="stats-section">
-          <div className="stats-section-title">平均频带功率 (跨通道)</div>
-          <div className="freq-bands-summary">
-            {bands.map((band) => {
-              const bandInfo = EEG_BANDS[band];
-              const summary = bandSummary[band];
-              const relativePercent = summary.relative * 100;
-
-              return (
-                <div key={band} className="freq-band-summary-item">
-                  <div className="freq-band-header">
-                    <span className="freq-band-name" style={{ color: bandInfo.color }}>
-                      {bandInfo.label}
-                    </span>
-                    <span className="freq-band-range">
-                      {bandInfo.range[0]}-{bandInfo.range[1]} Hz
-                    </span>
-                  </div>
-                  <div className="freq-band-bar-container">
-                    <div
-                      className="freq-band-bar-fill"
-                      style={{
-                        width: `${relativePercent}%`,
-                        backgroundColor: bandInfo.color,
-                      }}
-                    />
-                  </div>
-                  <div className="freq-band-values">
-                    <span className="freq-band-absolute">{formatPower(summary.absolute)} µV²</span>
-                    <span className="freq-band-relative">{formatPercent(summary.relative)}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 各通道频带功率 */}
-        <div className="stats-section">
-          <div className="stats-section-title">通道频带功率</div>
+          <div className="stats-section-title">频带功率</div>
           <div className="channel-freq-list">
             {channels.map((ch) => {
               const channelData = results.frequency!.bandPowers[ch];
 
-              // 计算该通道所有频带功率的总和（用于缩放）
               const channelTotalPower = bands.reduce(
                 (sum, band) => sum + (channelData[band]?.absolute || 0),
                 0
@@ -216,7 +135,6 @@ export const FrequencyView: React.FC<FrequencyViewProps> = ({
 
                       if (!data) return null;
 
-                      // 使用总和进行缩放，所有比例条加起来 = 100%
                       const barWidth = channelTotalPower > 0
                         ? (data.absolute / channelTotalPower) * 100
                         : 0;

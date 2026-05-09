@@ -5,6 +5,8 @@ import React from "react";
 const mockToggleVisibility = vi.fn();
 const mockAddUser = vi.fn().mockResolvedValue(undefined);
 const mockDeleteUser = vi.fn().mockResolvedValue(undefined);
+const mockGenerateAnnotations = vi.fn().mockResolvedValue(undefined);
+const mockClearCache = vi.fn().mockResolvedValue(undefined);
 
 const mockAnnotations = [
   {
@@ -72,6 +74,8 @@ const createDefaultState = () => ({
   toggleTypeVisibility: mockToggleVisibility,
   addUserAnnotation: mockAddUser,
   deleteUserAnnotation: mockDeleteUser,
+  generateAnnotations: mockGenerateAnnotations,
+  clearCache: mockClearCache,
   getVisibleAnnotations: vi.fn().mockReturnValue(mockAnnotations),
 });
 
@@ -153,8 +157,10 @@ describe("AnnotationPanel", () => {
   it("calls toggleTypeVisibility when type toggle is clicked", async () => {
     const { AnnotationPanel } = await import("../AnnotationPanel");
     render(<AnnotationPanel {...defaultProps} />);
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[0]);
+    // 找到类型过滤器区域的复选框（在源分组展开后）
+    const typeCheckboxes = screen.getAllByRole("checkbox");
+    // 跳过前两个生成选项复选框，点击类型过滤复选框
+    fireEvent.click(typeCheckboxes[2]);
     expect(mockToggleVisibility).toHaveBeenCalled();
   });
 
@@ -201,7 +207,8 @@ describe("AnnotationPanel", () => {
   it("calls deleteUserAnnotation when delete button is clicked", async () => {
     const { AnnotationPanel } = await import("../AnnotationPanel");
     render(<AnnotationPanel {...defaultProps} />);
-    const deleteButtons = screen.getAllByText("✕");
+    // 找到用户标注区域的删除按钮（有 title="删除标注" 的按钮）
+    const deleteButtons = screen.getAllByTitle("删除标注");
     fireEvent.click(deleteButtons[0]);
     expect(mockDeleteUser).toHaveBeenCalledWith("test-file", "3");
   });
@@ -248,5 +255,47 @@ describe("AnnotationPanel", () => {
       />
     );
     expect(screen.getByText("加载中...")).toBeInTheDocument();
+  });
+
+  it("shows error state with retry button when error is set", async () => {
+    mockStoreState = {
+      ...createDefaultState(),
+      annotationSet: null,
+      isLoading: false,
+      error: "Network Error",
+      generateAnnotations: mockGenerateAnnotations,
+    };
+    const { AnnotationPanel } = await import("../AnnotationPanel");
+    render(
+      <AnnotationPanel
+        fileId="test-file"
+        channels={[]}
+        onJumpToTime={defaultProps.onJumpToTime}
+      />
+    );
+    expect(screen.getByText(/网络错误/)).toBeInTheDocument();
+    const retryButton = screen.getByText("重试");
+    expect(retryButton).toBeInTheDocument();
+    fireEvent.click(retryButton);
+    expect(mockGenerateAnnotations).toHaveBeenCalledWith("test-file");
+  });
+
+  it("shows generic error message for non-network errors", async () => {
+    mockStoreState = {
+      ...createDefaultState(),
+      annotationSet: null,
+      isLoading: false,
+      error: "Some other error",
+      generateAnnotations: mockGenerateAnnotations,
+    };
+    const { AnnotationPanel } = await import("../AnnotationPanel");
+    render(
+      <AnnotationPanel
+        fileId="test-file"
+        channels={[]}
+        onJumpToTime={defaultProps.onJumpToTime}
+      />
+    );
+    expect(screen.getByText("Some other error")).toBeInTheDocument();
   });
 });

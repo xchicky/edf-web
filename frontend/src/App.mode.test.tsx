@@ -19,11 +19,24 @@ const mockUseEDFStore = vi.mocked(useEDFStore);
 vi.mock('./api/edf');
 const mockEdfApi = vi.mocked(edfApi);
 
-// Mock react-dropzone
+// Mock react-dropzone with realistic props
 vi.mock('react-dropzone', () => ({
   useDropzone: () => ({
-    getRootProps: () => ({ }),
-    getInputProps: () => ({ }),
+    getRootProps: () => ({
+      role: 'presentation',
+      tabIndex: 0,
+      onDragEnter: expect.any(Function),
+      onDragOver: expect.any(Function),
+      onDragLeave: expect.any(Function),
+      onDrop: expect.any(Function),
+      onClick: expect.any(Function),  // This is the bug trigger
+    }),
+    getInputProps: () => ({
+      accept: { 'application/octet-stream': ['.edf'] },
+      multiple: false,
+      type: 'file',
+      style: { display: 'none' },
+    }),
   }),
 }));
 
@@ -152,6 +165,20 @@ describe('App - Mode Management UI Integration', () => {
       getBuiltInModes: vi.fn(),
       getRecentlyUsedModes: vi.fn(),
     } as any);
+  });
+
+  describe('文件上传入口', () => {
+    it('波形显示区域不应挂载 dropzone props 或隐藏 file input', () => {
+      render(<App />);
+
+      const waveformDisplay = document.querySelector('.waveform-display');
+      expect(waveformDisplay).toBeInTheDocument();
+      expect(waveformDisplay).not.toHaveAttribute('role', 'presentation');
+      expect(waveformDisplay).not.toHaveAttribute('tabindex', '0');
+
+      const fileInput = waveformDisplay?.querySelector('input[type="file"]');
+      expect(fileInput).not.toBeInTheDocument();
+    });
   });
 
   describe('UI 集成 - ModeSelector', () => {

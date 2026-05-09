@@ -58,6 +58,7 @@ class AnalysisService:
         start_time: float,
         duration: float,
         channels: Optional[List[str]] = None,
+        preprocess_config: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Dict[str, Any]]:
         """
         计算时域统计量
@@ -92,6 +93,17 @@ class AnalysisService:
         # 获取数据（微伏）
         data = raw_cropped.get_data(units="µV")
         sfreq = self.raw.info["sfreq"]
+
+        # 应用预处理
+        if preprocess_config and preprocess_config.get("method", "none") != "none":
+            from app.services.preprocessing import SignalPreprocessor
+            preprocessor = SignalPreprocessor(float(sfreq))
+            method = preprocess_config["method"]
+            kwargs = preprocess_config.get("parameters") or {}
+            processed = np.zeros_like(data)
+            for i in range(data.shape[0]):
+                processed[i] = preprocessor.process(data[i], method=method, **kwargs)
+            data = processed
 
         results = {}
 
@@ -142,6 +154,7 @@ class AnalysisService:
         duration: float,
         channels: Optional[List[str]] = None,
         bands: Optional[Dict[str, Tuple[float, float]]] = None,
+        preprocess_config: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Dict[str, Any]]:
         """
         计算频带功率
@@ -181,6 +194,17 @@ class AnalysisService:
         # 获取数据
         data = raw_cropped.get_data(units="µV")
         sfreq = float(self.raw.info["sfreq"])
+
+        # 应用预处理
+        if preprocess_config and preprocess_config.get("method", "none") != "none":
+            from app.services.preprocessing import SignalPreprocessor
+            preprocessor = SignalPreprocessor(sfreq)
+            method = preprocess_config["method"]
+            kwargs = preprocess_config.get("parameters") or {}
+            processed = np.zeros_like(data)
+            for i in range(data.shape[0]):
+                processed[i] = preprocessor.process(data[i], method=method, **kwargs)
+            data = processed
 
         results = {}
 
@@ -261,6 +285,7 @@ class AnalysisService:
         channels: Optional[List[str]] = None,
         fmin: float = 0.5,
         fmax: float = 50,
+        preprocess_config: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Dict[str, Any]]:
         """
         计算功率谱密度
@@ -297,6 +322,17 @@ class AnalysisService:
         # 获取数据
         data = raw_cropped.get_data(units="µV")
         sfreq = float(self.raw.info["sfreq"])
+
+        # 应用预处理
+        if preprocess_config and preprocess_config.get("method", "none") != "none":
+            from app.services.preprocessing import SignalPreprocessor
+            preprocessor = SignalPreprocessor(sfreq)
+            method = preprocess_config["method"]
+            kwargs = preprocess_config.get("parameters") or {}
+            processed = np.zeros_like(data)
+            for i in range(data.shape[0]):
+                processed[i] = preprocessor.process(data[i], method=method, **kwargs)
+            data = processed
 
         results = {}
 

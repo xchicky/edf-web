@@ -2,7 +2,9 @@ import React from 'react';
 import type { WaveformData } from '../store/edfStore';
 import { CursorOverlay } from './CursorOverlay';
 import { AnnotationLayer } from './AnnotationLayer';
+import { ProcessedWaveformLayer } from './ProcessedWaveformLayer';
 import { useEDFStore } from '../store/edfStore';
+import { usePipelineStore } from '../store/pipelineStore';
 
 interface WaveformCanvasProps {
   waveformData: WaveformData;
@@ -15,6 +17,7 @@ interface WaveformCanvasProps {
   amplitudeScale?: number;
   // 选择相关属性
   onSelectionChange?: (start: number | null, end: number | null) => void;
+  onSelectionChannelChange?: (channelIndex: number | null) => void;
   // 从store传入的选择状态
   selectionStart?: number | null;
   selectionEnd?: number | null;
@@ -32,6 +35,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   windowDuration = 5,
   amplitudeScale = 1.0,
   onSelectionChange: _onSelectionChange,
+  onSelectionChannelChange,
   selectionStart = null,
   selectionEnd = null,
   isSelecting = false,
@@ -66,6 +70,8 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     channel: '',
   });
 
+  const processedWaveform = usePipelineStore((s) => s.processedWaveform);
+
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -94,8 +100,17 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
 
       // 计算点击位置对应的时间 (use CSS pixels, not device pixels)
       const cssWidth = rect.width;
+      const cssHeight = rect.height;
       const pixelsPerSecond = (cssWidth - 50) / windowDuration;
       const clickTime = currentTime + (x - 50) / pixelsPerSecond;
+
+      // 计算点击位置对应的通道索引
+      const y = event.clientY - rect.top;
+      const ch = waveformData ? Math.floor(y / (cssHeight / waveformData.channels.length)) : null;
+      const clampedCh = ch !== null ? Math.min(ch, waveformData!.channels.length - 1) : null;
+      if (onSelectionChannelChange && clampedCh !== null) {
+        onSelectionChannelChange(clampedCh);
+      }
 
       // 直接更新store中的选择状态
       const { setSelectionStart, setSelectionEnd, setIsSelecting } = useEDFStore.getState();
@@ -485,6 +500,17 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         currentTime={currentTime}
         windowDuration={windowDuration}
         channels={waveformData.channels}
+        channelHeight={canvasSizeForOverlay.height / waveformData.channels.length}
+        leftMargin={50}
+      />
+    )}
+    {waveformData && canvasSizeForOverlay.width > 0 && (
+      <ProcessedWaveformLayer
+        width={canvasSizeForOverlay.width}
+        height={canvasSizeForOverlay.height}
+        waveformData={processedWaveform}
+        currentTime={currentTime}
+        windowDuration={windowDuration}
         channelHeight={canvasSizeForOverlay.height / waveformData.channels.length}
         leftMargin={50}
       />

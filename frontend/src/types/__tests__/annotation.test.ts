@@ -20,7 +20,7 @@ describe("annotation types", () => {
   });
 
   it("all types covered by source groups", () => {
-    const grouped = Object.values(ANNOTATION_TYPES_BY_SOURCE).flat();
+    const grouped = [...new Set(Object.values(ANNOTATION_TYPES_BY_SOURCE).flat())];
     expect(grouped.sort()).toEqual([...ALL_ANNOTATION_TYPES].sort());
   });
 

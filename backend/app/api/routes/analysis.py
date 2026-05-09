@@ -4,10 +4,12 @@ Analysis API endpoint - Time domain stats, frequency analysis, and comprehensive
 
 import asyncio
 
+import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from app.services.analysis_service import AnalysisService
+from app.services.preprocessing import SignalPreprocessor
 from app.services.file_manager import get_file_path
 import logging
 
@@ -16,11 +18,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+class PreprocessConfig(BaseModel):
+    """预处理配置"""
+    method: str = "none"
+    parameters: Optional[Dict[str, float]] = None
+
+
+def apply_preprocess(data: np.ndarray, sfreq: float, config: PreprocessConfig) -> np.ndarray:
+    """对数据应用预处理，返回处理后的数据。data shape: (n_channels, n_samples)"""
+    if config.method == "none":
+        return data
+    preprocessor = SignalPreprocessor(sfreq)
+    kwargs = config.parameters or {}
+    processed = np.zeros_like(data)
+    for i in range(data.shape[0]):
+        processed[i] = preprocessor.process(data[i], method=config.method, **kwargs)
+    return processed
+
+
 class TimeDomainRequest(BaseModel):
     """时域分析请求"""
     channels: Optional[List[str]] = None
     start: float
     duration: float
+    preprocess: Optional[PreprocessConfig] = None
 
 
 class ChannelTimeDomainStats(BaseModel):
@@ -49,6 +70,7 @@ class BandPowerRequest(BaseModel):
     start: float
     duration: float
     bands: Optional[Dict[str, List[float]]] = None
+    preprocess: Optional[PreprocessConfig] = None
 
 
 class BandPowerResult(BaseModel):
@@ -72,6 +94,7 @@ class PSDRequest(BaseModel):
     duration: float
     fmin: float = 0.5
     fmax: float = 50
+    preprocess: Optional[PreprocessConfig] = None
 
 
 class PSDResult(BaseModel):
@@ -96,6 +119,7 @@ class ComprehensiveRequest(BaseModel):
     fmin: float = 0.5
     fmax: float = 50
     bands: Optional[Dict[str, List[float]]] = None
+    preprocess: Optional[PreprocessConfig] = None
 
 
 class ComprehensiveResponse(BaseModel):
@@ -117,10 +141,12 @@ async def analyze_time_domain(file_id: str, request: TimeDomainRequest):
 
         def _compute():
             analyzer = AnalysisService(file_path)
+            preprocess_dict = request.preprocess.model_dump() if request.preprocess else None
             return analyzer.compute_time_domain_stats(
                 start_time=request.start,
                 duration=request.duration,
                 channels=request.channels,
+                preprocess_config=preprocess_dict,
             )
 
         results = await asyncio.to_thread(_compute)
@@ -171,11 +197,13 @@ async def analyze_band_power(file_id: str, request: BandPowerRequest):
 
         def _compute():
             analyzer = AnalysisService(file_path)
+            preprocess_dict = request.preprocess.model_dump() if request.preprocess else None
             return analyzer.compute_band_power(
                 start_time=request.start,
                 duration=request.duration,
                 channels=request.channels,
                 bands=bands,
+                preprocess_config=preprocess_dict,
             )
 
         results = await asyncio.to_thread(_compute)
@@ -225,12 +253,14 @@ async def analyze_psd(file_id: str, request: PSDRequest):
 
         def _compute():
             analyzer = AnalysisService(file_path)
+            preprocess_dict = request.preprocess.model_dump() if request.preprocess else None
             return analyzer.compute_psd(
                 start_time=request.start,
                 duration=request.duration,
                 channels=request.channels,
                 fmin=request.fmin,
                 fmax=request.fmax,
+                preprocess_config=preprocess_dict,
             )
 
         results = await asyncio.to_thread(_compute)
@@ -281,6 +311,7 @@ async def analyze_comprehensive(file_id: str, request: ComprehensiveRequest):
             }
 
         channels_arg = request.channels
+        preprocess_dict = request.preprocess.model_dump() if request.preprocess else None
 
         def _compute_all():
             analyzer = AnalysisService(file_path)
@@ -289,6 +320,7 @@ async def analyze_comprehensive(file_id: str, request: ComprehensiveRequest):
                 start_time=request.start,
                 duration=request.duration,
                 channels=channels_arg,
+                preprocess_config=preprocess_dict,
             )
 
             bp_results = analyzer.compute_band_power(
@@ -296,6 +328,7 @@ async def analyze_comprehensive(file_id: str, request: ComprehensiveRequest):
                 duration=request.duration,
                 channels=channels_arg,
                 bands=bands,
+                preprocess_config=preprocess_dict,
             )
 
             psd_results = analyzer.compute_psd(
@@ -304,6 +337,7 @@ async def analyze_comprehensive(file_id: str, request: ComprehensiveRequest):
                 channels=channels_arg,
                 fmin=request.fmin,
                 fmax=request.fmax,
+                preprocess_config=preprocess_dict,
             )
 
             return td_results, bp_results, psd_results

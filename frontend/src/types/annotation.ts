@@ -1,7 +1,7 @@
 export interface Annotation {
   id: string;
   annotation_type: string;
-  source: "preprocess" | "band_analysis" | "anomaly_detection" | "user";
+  source: "preprocess" | "band_analysis" | "anomaly_detection" | "user" | "pipeline";
   channel: string | null;
   start_time: number;
   end_time: number;
@@ -69,4 +69,17 @@ export const ANNOTATION_TYPES_BY_SOURCE: Record<string, string[]> = {
     "anomaly_rhythmic",
   ],
   user: ["user_note"],
+  pipeline: [
+    "artifact_eog",
+    "artifact_emg",
+    "artifact_flat",
+    "artifact_drift",
+    "artifact_jump",
+    "anomaly_spike",
+    "anomaly_sharp_wave",
+    "anomaly_spike_and_slow",
+    "anomaly_slow_wave",
+    "anomaly_rhythmic",
+    "band_dominant",
+  ],
 };

@@ -5,6 +5,7 @@ import {
   ANNOTATION_RENDER_CONFIG,
 } from "../types/annotation";
 import type { Annotation } from "../types/annotation";
+import type { GenerateAnnotationsOptions } from "../api/annotations";
 import styles from "./AnnotationPanel.module.css";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -58,6 +59,7 @@ export function AnnotationPanel({
   const annotationSet = useAnnotationStore((s) => s.annotationSet);
   const visibilityFilter = useAnnotationStore((s) => s.visibilityFilter);
   const isLoading = useAnnotationStore((s) => s.isLoading);
+  const error = useAnnotationStore((s) => s.error);
   const toggleTypeVisibility = useAnnotationStore(
     (s) => s.toggleTypeVisibility
   );
@@ -68,6 +70,8 @@ export function AnnotationPanel({
   const getVisibleAnnotations = useAnnotationStore(
     (s) => s.getVisibleAnnotations
   );
+  const generateAnnotations = useAnnotationStore((s) => s.generateAnnotations);
+  const clearCache = useAnnotationStore((s) => s.clearCache);
 
   const [collapsedGroups, setCollapsedGroups] = useState<
     Record<string, boolean>
@@ -78,6 +82,10 @@ export function AnnotationPanel({
     startTime: "",
     endTime: "",
     label: "",
+  });
+  const [genOptions, setGenOptions] = useState<GenerateAnnotationsOptions>({
+    run_band_analysis: true,
+    run_anomaly_detection: true,
   });
 
   const toggleGroup = useCallback((source: string) => {
@@ -127,13 +135,29 @@ export function AnnotationPanel({
 
   if (!annotationSet) {
     return (
-      <div className={styles.container}>
+      <div className={styles.container} data-testid="annotation-panel">
         <div className={styles.header}>标注分析</div>
         <div className={styles.emptyState}>
           {isLoading ? (
             <div className={styles.loading}>
               <span className={styles.spinner} />
               加载中...
+            </div>
+          ) : error ? (
+            <div className={styles.errorState}>
+              <span className={styles.errorIcon}>⚠️</span>
+              <span className={styles.errorMessage}>
+                {error.includes('Network Error')
+                  ? '网络错误，请检查后端服务'
+                  : error}
+              </span>
+              <button
+                className={styles.retryButton}
+                onClick={() => fileId && generateAnnotations(fileId)}
+                disabled={isLoading}
+              >
+                重试
+              </button>
             </div>
           ) : (
             "暂无标注数据，请先加载 EDF 文件"
@@ -146,9 +170,63 @@ export function AnnotationPanel({
   const totalAnnotations = annotationSet.annotations.length;
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>标注分析</div>
-      <div className={styles.summary}>共 {totalAnnotations} 条标注</div>
+    <div className={styles.container} data-testid="annotation-panel">
+      <div className={styles.header}>
+        <span>标注分析</span>
+        <div className={styles.headerActions}>
+          <button
+            className={styles.iconButton}
+            onClick={() => fileId && generateAnnotations(fileId, genOptions)}
+            disabled={isLoading}
+            title="重新生成标注"
+            aria-label="刷新标注"
+            data-testid="annotation-refresh-btn"
+          >
+            ↻
+          </button>
+          <button
+            className={styles.iconButton}
+            onClick={() => fileId && clearCache(fileId)}
+            disabled={isLoading}
+            data-testid="annotation-clear-cache-btn"
+            title="清除标注缓存"
+            aria-label="清除缓存"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+      <div className={styles.summary}>
+        共 {totalAnnotations} 条标注
+        <div className={styles.genOptions}>
+          <label className={styles.genOptionLabel}>
+            <input
+              type="checkbox"
+              checked={genOptions.run_band_analysis !== false}
+              onChange={(e) =>
+                setGenOptions((prev) => ({
+                  ...prev,
+                  run_band_analysis: e.target.checked,
+                }))
+              }
+            />
+            频段
+          </label>
+          <label className={styles.genOptionLabel}>
+            <input
+              type="checkbox"
+              checked={genOptions.run_anomaly_detection !== false}
+              onChange={(e) =>
+                setGenOptions((prev) => ({
+                  ...prev,
+                  run_anomaly_detection: e.target.checked,
+                }))
+              }
+            />
+            异常
+          </label>
+        </div>
+      </div>
 
       {SOURCE_ORDER.map((source) => {
         const types = ANNOTATION_TYPES_BY_SOURCE[source];

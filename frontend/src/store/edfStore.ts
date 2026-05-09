@@ -53,6 +53,8 @@ interface EDFStore {
   error: string | null;
   windowDuration: number;
   amplitudeScale: number;
+  tcValue: number | null;
+  hfValue: number | null;
   isPlaying: boolean;
   bookmarks: Bookmark[];
   signals: Signal[];
@@ -63,6 +65,7 @@ interface EDFStore {
   selectionEnd: number | null;
   isSelecting: boolean;
   hasSelection: boolean;  // 是否有已确认的选择
+  selectionChannel: number | null;  // 选区所在通道索引
 
   // 分析状态
   analysisResults: AnalysisResult | null;
@@ -92,6 +95,8 @@ interface EDFStore {
   setError: (error: string | null) => void;
   setWindowDuration: (duration: number) => void;
   setAmplitudeScale: (scale: number) => void;
+  setTcValue: (tc: number | null) => void;
+  setHfValue: (hf: number | null) => void;
   setIsPlaying: (playing: boolean) => void;
   setBookmarks: (bookmarks: Bookmark[]) => void;
   addBookmark: (label: string, time: number) => void;
@@ -117,6 +122,7 @@ interface EDFStore {
   setIsSelecting: (isSelecting: boolean) => void;
   confirmSelection: () => void;  // 确认选择（松开鼠标时调用）
   clearSelection: () => void;
+  setSelectionChannel: (channel: number | null) => void;
 
   // 分析方法
   runAnalysis: (
@@ -160,6 +166,8 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
   error: null,
   windowDuration: 5,
   amplitudeScale: 1.0,
+  tcValue: 0.3,
+  hfValue: 70,
   isPlaying: false,
   bookmarks: [],
   signals: [],
@@ -170,6 +178,7 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
   selectionEnd: null,
   isSelecting: false,
   hasSelection: false,
+  selectionChannel: null,
 
   // 分析状态
   analysisResults: null,
@@ -211,6 +220,8 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
   setError: (error) => set({ error }),
   setWindowDuration: (windowDuration) => set({ windowDuration }),
   setAmplitudeScale: (amplitudeScale) => set({ amplitudeScale }),
+  setTcValue: (tcValue) => set({ tcValue }),
+  setHfValue: (hfValue) => set({ hfValue }),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
   setBookmarks: (bookmarks) => set({ bookmarks }),
   addBookmark: (label, time) => {
@@ -312,11 +323,12 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
   setSelectionEnd: (time) => set({ selectionEnd: time }),
   setIsSelecting: (isSelecting) => set({ isSelecting }),
   confirmSelection: () => set({ isSelecting: false, hasSelection: true }),  // 确认选择
-  clearSelection: () => set({ selectionStart: null, selectionEnd: null, isSelecting: false, hasSelection: false }),
+  clearSelection: () => set({ selectionStart: null, selectionEnd: null, isSelecting: false, hasSelection: false, selectionChannel: null }),
+  setSelectionChannel: (selectionChannel) => set({ selectionChannel }),
 
   // 分析方法
   runAnalysis: async (selectionStart, selectionEnd, type) => {
-    const { metadata, selectedChannels, signals, signalData, preprocessConfig } = get();
+    const { metadata, selectedChannels, signals, signalData, preprocessConfig, selectionChannel } = get();
 
     if (!metadata?.file_id) {
       set({ analysisError: '没有加载的文件' });
@@ -330,10 +342,15 @@ export const useEDFStore = create<EDFStore>((set, get) => ({
       const end = Math.max(selectionStart, selectionEnd);
       const duration = end - start;
 
-      // 获取选中的通道名称
-      const channelNames = selectedChannels.length > 0
-        ? selectedChannels.map(i => metadata?.channel_names[i] ?? '').filter(Boolean)
-        : metadata.channel_names;
+      // 获取选中的通道名称：如果选区有通道信息，只分析该通道
+      let channelNames: string[];
+      if (selectionChannel !== null && metadata.channel_names[selectionChannel]) {
+        channelNames = [metadata.channel_names[selectionChannel]];
+      } else {
+        channelNames = selectedChannels.length > 0
+          ? selectedChannels.map(i => metadata?.channel_names[i] ?? '').filter(Boolean)
+          : metadata.channel_names;
+      }
 
       // 根据分析类型调用不同的 API
       if (type === 'stats') {
